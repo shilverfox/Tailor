@@ -1,0 +1,25 @@
+{
+  "started_at": "2026-07-14T13:16:22.282357+00:00",
+  "endpoint": "https://www.right.codes/draw/v1/images/generations",
+  "model": "gpt-image-2",
+  "size": "16:9",
+  "transport": "insecure-compatibility",
+  "submission": {
+    "task_id": "task_5f148494e63346418bf7c7380e3762fc",
+    "status": "processing",
+    "progress": 0,
+    "message": "任务id: task_5f148494e63346418bf7c7380e3762fc，任务还在处理中，请稍后到异步任务中查看结果"
+  },
+  "last_status": {
+    "id": "task_5f148494e63346418bf7c7380e3762fc",
+    "task_id": "task_5f148494e63346418bf7c7380e3762fc",
+    "object": "image",
+    "model": "gpt-image-2",
+    "status": "in_progress",
+    "progress": 2,
+    "created_at": 1784034983
+  },
+  "outcome": "poll_timeout",
+  "task_id": "task_5f148494e63346418bf7c7380e3762fc",
+  "finished_at": "2026-07-14T13:18:25.114408+00:00"
+}

@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-07-14T14:06:06.124976+00:00",
+  "items": [
+    {
+      "name": "01_Welcome_hero",
+      "title": "Welcome hero (editorial_welcome_companion) --ar 3:2",
+      "size": "1792x1024",
+      "source": "rightcodes",
+      "task_id": "task_fd6c1944b2eb420a88245a3cb2597439",
+      "source_url": "https://file1.aitohumanize.com/file/17b050379f9e4376beadf28e2e1f3aaf.png",
+      "elapsed_seconds": 117.0,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/01_Welcome_hero.png",
+      "bytes": 2100217,
+      "sha256": "fa94ca63a79dfb01a2dcd0be2bed04e85a994e8c51d8c3d4b5cfdd61bf97c91f"
+    },
+    {
+      "name": "02_Warm_Paper",
+      "title": "Warm Paper (template_warm_paper_texture) --ar 5:7",
+      "size": "1024x1792",
+      "source": "rightcodes",
+      "task_id": "task_421d0e14bf0b49b18e2ba6fab06c5599",
+      "source_url": "https://file3.aitohumanize.com/file/3b02ad7fabc34a2da679dd523f25411a.png",
+      "elapsed_seconds": 56.8,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/02_Warm_Paper.png",
+      "bytes": 2246094,
+      "sha256": "599748469bd467061388416a1e467b6e6d7386d9b5b9e584652aa39a321f47ce"
+    },
+    {
+      "name": "03_Quiet_Night",
+      "title": "Quiet Night (template_quiet_night_texture) --ar 5:7",
+      "size": "1024x1792",
+      "source": "rightcodes",
+      "task_id": "task_8c3497d8c6c14db2a4c8166537f687d3",
+      "source_url": "https://file1.aitohumanize.com/file/e32d542ae980464c82145e082d7dabf8.png",
+      "elapsed_seconds": 155.8,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/03_Quiet_Night.png",
+      "bytes": 2218582,
+      "sha256": "9bab9be50b59fa8d051c312fb32a91581590b3c1a6ac277a400160e9b94cc0d9"
+    },
+    {
+      "name": "04_Field_Notes",
+      "title": "Field Notes (template_field_notes_texture) --ar 5:7",
+      "size": "1024x1792",
+      "source": "rightcodes",
+      "task_id": "task_fd2a43d6d9514f0682b443e17d82cee7",
+      "source_url": "https://file1.aitohumanize.com/file/8509e1d64fd847ef81d00dcfb4a04391.png",
+      "elapsed_seconds": 122.9,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/04_Field_Notes.png",
+      "bytes": 2222548,
+      "sha256": "fc610d7ab8d0b0729363f3905dad2cf333210363bd326f531272e8704fe07588"
+    },
+    {
+      "name": "05_Privacy_companion",
+      "title": "Privacy companion (editorial_privacy_companion) --ar 3:2",
+      "size": "1792x1024",
+      "source": "rightcodes",
+      "task_id": "task_af27aedfb9cc4643a6cce2fa7f52a772",
+      "source_url": "https://file3.aitohumanize.com/file/d7dda32f1ff8420a8e8723251c3a29b8.png",
+      "elapsed_seconds": 167.9,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/05_Privacy_companion.png",
+      "bytes": 2019931,
+      "sha256": "f1872173e4e9fc769f971d3fcbe9446a2832553bb0ab34cadfc5da46e6118eba"
+    },
+    {
+      "name": "06_Export_completion_companion",
+      "title": "Export completion companion (editorial_export_completion_companion) --ar 3:2",
+      "size": "1792x1024",
+      "source": "rightcodes",
+      "task_id": "task_a52bfc9fc3e748abbcc9f0d911c83d6e",
+      "source_url": "https://file4.aitohumanize.com/file/89d5749961fd4d7790774d310dc6c2d6.png",
+      "elapsed_seconds": 115.0,
+      "errors": [],
+      "path": "/Users/lijian15/iosWork/Tailor/design/assets/06_Export_completion_companion.png",
+      "bytes": 1869507,
+      "sha256": "030f55a3cd32c08a970627186b4e95323e843f6d97a261cfb529d1ff9fffe8d2"
+    }
+  ],
+  "generator": {
+    "provider": "right.codes",
+    "model": "gpt-image-2",
+    "transport": "insecure-compatibility",
+    "protocol": "async submission plus task polling"
+  }
+}

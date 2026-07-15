@@ -1,0 +1,16 @@
+{
+  "model": "gpt-image-2",
+  "size": "1792x1024",
+  "task_id": "task_e95f233982c24bd5bdc1a4e3d1045b9f",
+  "outcome": "completed_after_extended_poll",
+  "final_status": {
+    "created": 1784035110,
+    "data": [
+      {
+        "url": "https://file1.aitohumanize.com/file/8dcee82c9a0143728aec6284b54769cd.png"
+      }
+    ]
+  },
+  "image_path": "/Users/lijian15/iosWork/Tailor/Tailor/Resources/RightCodeTest/rightcodes_protocol_test.png",
+  "verified_at": "2026-07-14T13:18:00+00:00"
+}

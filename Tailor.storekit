@@ -1,0 +1,40 @@
+{
+  "identifier" : "8D77E5B3-9C0E-4A01-A347-BEF27A2BEF48",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : false,
+      "internalID" : "1D6BB29A-3BA2-4F35-9ED8-A0A4D25E46BA",
+      "localizations" : [
+        {
+          "description" : "Unlock Tailor's complete, watermark-free life archive PDF.",
+          "displayName" : "Tailor Complete Album",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "tailor.life_archive.unlock",
+      "referenceName" : "Tailor Complete Album",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      { "current" : null, "enabled" : false, "name" : "Load Products" },
+      { "current" : null, "enabled" : false, "name" : "Purchase" },
+      { "current" : null, "enabled" : false, "name" : "Verification" },
+      { "current" : null, "enabled" : false, "name" : "App Store Sync" }
+    ]
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

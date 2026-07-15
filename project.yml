@@ -1,0 +1,16 @@
+name: Tailor
+options:
+  minimumXcodeGenVersion: 2.38.0
+targets:
+  Tailor:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources: [Tailor]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tailor.prototype
+        SWIFT_VERSION: 5.0
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Tailor
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: Tailor only scans photos you allow to help you create a private life archive.
