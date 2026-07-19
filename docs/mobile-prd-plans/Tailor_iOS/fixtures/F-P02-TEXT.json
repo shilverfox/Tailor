@@ -1,0 +1,25 @@
+{
+  "fixture": "F-P02-TEXT",
+  "privacy": "Synthetic local strings only; no Photos asset is requested.",
+  "pages": [
+    { "kind": "cover", "fields": ["coverPetName", "coverSubtitle", "coverYearRange"] },
+    { "kind": "dedication", "fields": ["dedicationMessage"] },
+    { "kind": "contents", "fields": [] },
+    { "kind": "chapterOpener", "fields": ["chapterTitle", "chapterDateRange", "chapterNote"] },
+    { "kind": "photoSelection", "fields": ["photoTitle", "photoCaption"], "limit": 120 },
+    { "kind": "milestone", "fields": ["milestoneDate", "milestoneNote"] },
+    { "kind": "closing", "fields": ["closingMessage"] }
+  ],
+  "samples": {
+    "photoCaption": "120 graphemes including ZWJ emoji",
+    "dedication": "240 graphemes including combining accents",
+    "chapterNote": "مرحبا، هذه أيام 点点 👨‍👩‍👧‍👦\né محفوظة كما كتبتها",
+    "unicode": ["中文", "Arabic/RTL", "emoji", "ZWJ emoji", "combining grapheme", "newline"],
+    "directionRule": "The first strong scalar is Arabic; every generated line-box manifest must record rightToLeft and at least two lines."
+  },
+  "matrix": {
+    "templates": ["warmPaper", "quietNight", "fieldNotes", "cinema", "filmAlbum"],
+    "paperSizes": ["letter", "a4"],
+    "generatedLineBoxManifest": "/tmp/tailor-p02-text-b1-evidence/F-P02-TEXT-line-box-manifest.json"
+  }
+}

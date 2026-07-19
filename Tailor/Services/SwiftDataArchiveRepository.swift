@@ -14,6 +14,12 @@ final class StoredPetProfile {
     var archivePhotosData: Data
     var chaptersData: Data
     var scanCheckpointData: Data?
+    var scanAuditMetricsData: Data?
+    var memoryBookData: Data?
+    var exportRecordsData: Data?
+    /// Aggregate local-only recognition feedback. Optional preserves migration
+    /// compatibility with archives saved before this field existed.
+    var recognitionFeedbackData: Data?
     var updatedAt: Date
 
     init(profile: PetProfile) {
@@ -28,6 +34,10 @@ final class StoredPetProfile {
         archivePhotosData = Data()
         chaptersData = Data()
         scanCheckpointData = nil
+        scanAuditMetricsData = nil
+        memoryBookData = nil
+        exportRecordsData = nil
+        recognitionFeedbackData = nil
         updatedAt = .now
     }
 
@@ -61,6 +71,10 @@ final class StoredPetProfile {
             photos: (try? JSONDecoder().decode([ArchivePhoto].self, from: archivePhotosData)) ?? [],
             chapters: (try? JSONDecoder().decode([Chapter].self, from: chaptersData)) ?? [],
             scanCheckpoint: scanCheckpointData.flatMap { try? JSONDecoder().decode(ScanCheckpoint.self, from: $0) },
+            scanAuditMetrics: scanAuditMetricsData.flatMap { try? JSONDecoder().decode(ScanAuditMetrics.self, from: $0) } ?? .init(),
+            memoryBook: memoryBookData.flatMap { try? JSONDecoder().decode(MemoryBookDocument.self, from: $0) },
+            exportRecords: exportRecordsData.flatMap { try? JSONDecoder().decode([MemoryBookExportRecord].self, from: $0) } ?? [],
+            recognitionFeedback: recognitionFeedbackData.flatMap { try? JSONDecoder().decode(PetRecognitionFeedbackSummary.self, from: $0) },
             updatedAt: updatedAt
         )
     }
@@ -70,6 +84,12 @@ final class StoredPetProfile {
         archivePhotosData = (try? JSONEncoder().encode(document.photos)) ?? Data()
         chaptersData = (try? JSONEncoder().encode(document.chapters)) ?? Data()
         scanCheckpointData = try? document.scanCheckpoint.map { try JSONEncoder().encode($0) }
+        scanAuditMetricsData = try? JSONEncoder().encode(document.scanAuditMetrics)
+        memoryBookData = try? document.memoryBook.map { try JSONEncoder().encode($0) }
+        exportRecordsData = try? JSONEncoder().encode(document.exportRecords)
+        // Recompute at the persistence boundary so direct domain mutations
+        // cannot save a stale aggregate beside the user's photo decisions.
+        recognitionFeedbackData = try? JSONEncoder().encode(.make(from: document.photos) as PetRecognitionFeedbackSummary)
         updatedAt = document.updatedAt
     }
 }

@@ -61,7 +61,7 @@ Status: design-ready implementation specification, based on `DESIGN_HANDOFF.md` 
 
 **Purpose / layout.** Full Ink screen; back/close action asks to keep draft when scan is active; eyebrow `ON-DEVICE SCAN`; title “Looking through the moments.” Central ProgressRing (percent), status “Checking 4,281 photos safely on this device.” Local thumbnail strip; scan card “1,426 photos checked” / “39 likely matches so far”; bottom primary is `Pause scan`. Fixed reassurance: “Processed on this iPhone. Your photos are not uploaded.”
 
-**Interaction.** Scan runs in batches. Pause changes ring status to `Paused` and button to `Resume scan`. If app backgrounds/locks, save progress and surface a local notification / in-app resume card on return **[Assumption: notification permission is not required; in-app feedback is mandatory]**. Back/cancel opens sheet: `Keep scan running in background` (if viable), `Pause and return`, `Cancel scan` (destructive; retains profile/reference photos but clears scan candidates only).
+**Interaction.** Scan runs in batches. Pause changes ring status to `Paused` and button to `Resume scan`. If app backgrounds/locks, save progress only; surface an in-app resume card only after the user actively reopens the archive. Do not register notifications or show a notification. Back/cancel opens sheet: `Pause and return`, `Cancel scan` (destructive; retains profile/reference photos but clears scan candidates only).
 
 **States.**
 
@@ -78,11 +78,11 @@ Status: design-ready implementation specification, based on `DESIGN_HANDOFF.md` 
 
 ## 06 — Photo confirmation
 
-**Purpose / layout.** Back nav / eyebrow `REVIEW`; title “We found 184 moments.” Year filter button and three tabs: `High · 126`, `Needs review · 42`, `Excluded · 16`; selected tab has text, underline and check/state icon. Scrollable 3-column local-photo grid. Bottom card says: “Nothing uncertain enters the archive automatically.” Primary `Create timeline` displays selected count.
+**Purpose / layout.** Back nav / eyebrow `REVIEW`; title “We found 184 moments.” Year filter button and four tabs: `High · 126`, `Needs review · 42`, `Sensitive · 3`, `Excluded · 16`; selected tab has text, underline and a named state icon. Scrollable 3-column local-photo grid. Bottom card says: “Nothing uncertain enters the archive automatically.” Primary `Create timeline` displays selected count. `Sensitive` has a protective explanation card and a collapsed `Never use (n)` manager.
 
-**Interactions.** High-confidence results start selected but can be deselected; needs-review items start unselected. Tapping image opens full-screen aspect-fit viewer with asset date/location (when available), `This is [name]`, `Not [name]`, `Skip`. Swipe is optional shortcut only: right confirms, left excludes, with undo snackbar. Long-press opens multi-select mode with `Exclude` and `Add to archive` gated by explicit confirmation. The Excluded tab has `Restore` action. Year filter is a bottom sheet with All years/default selection.
+**Interactions.** High-confidence results start selected but can be deselected; needs-review and sensitive items start unselected. Tapping image opens full-screen aspect-fit viewer with asset date/location (when available), `This is [name]`, `Not [name]`, `Set aside as sensitive`, `Decide later`, and `Never use in this archive`. `Never use` requires impact confirmation and immediately removes that asset from chapters, covers, previews and future PDFs without modifying Photos. Swipe is optional shortcut only: right confirms, left excludes, with undo snackbar. Long-press opens multi-select mode with `Exclude`, `Add to archive`, and `Set aside`; batch Never use requires confirmation. The Excluded tab has `Restore` action. Year filter is a bottom sheet with All years/default selection.
 
-**States.** Zero matches: title “No clear matches yet.” Body identifies local-only limitation; actions `Choose different reference photos`, `Select photos manually`, and `Keep this draft`. No photo is fabricated. Need-review remains non-blocking; create timeline can proceed with high-confirmed items. If zero confirmed images, primary becomes `Select photos to continue` disabled; manual selection is available. Batch exclusion asks confirmation only for >1 image.
+**States.** Sensitive assets never enter a chapter, cover, preview or PDF until the user selects `Use in this archive`; Tailor must not diagnose why they were set aside. Zero matches: title “No clear matches yet.” Body identifies local-only limitation; actions `Choose different reference photos`, `Select photos manually`, and `Keep this draft`. No photo is fabricated. Need-review remains non-blocking; create timeline can proceed with high-confirmed items. If zero confirmed images, primary becomes `Select photos to continue` disabled; manual selection is available. Batch exclusion asks confirmation only for >1 image.
 
 **A11y.** Grid items are buttons with date and state (“June 2019, needs review, not selected”). Never encode confidence only with corner color. Announce undo. Viewer has explicit alternatives to swipe and minimum 48-pt actions.
 
@@ -90,9 +90,9 @@ Status: design-ready implementation specification, based on `DESIGN_HANDOFF.md` 
 
 **Purpose / layout.** Back nav; eyebrow `TIMELINE`; title “[Name]’s life, in moments.” Body “Made from the photos you chose. Change every chapter.” Vertical year axis with 3–6 `ChapterCard`s, cover, neutral chapter title, count, and disclosure. Primary `Preview album`. Support note: “When dates do not establish a story, use neutral titles such as ‘2018–2020’ or ‘Days together.’”
 
-**Interaction.** Tap card opens Chapter editor. Context menu / Edit mode supports `Rename`, `Change cover`, `Hide from album`, `Merge with next chapter`, and drag reorder; merging requires confirmation and preserves all photos. Hiding excludes chapter from PDF but retains it in editable timeline. **[Assumption]** manual `Add chapter` appears in edit mode after data-model review.
+**Interaction.** Tap card opens Chapter editor. Context menu / Edit mode supports `Rename`, `Change cover`, `Hide from album`, `Merge with next chapter`, and drag reorder; merging requires confirmation and preserves all photos. Hiding requires an impact sheet and excludes the chapter plus its cover from preview/PDF, while retaining it in the editable timeline. `Edit periods` additionally supports hiding a whole year or user-selected date range without showing a photo preview. **[Assumption]** manual `Add chapter` appears in edit mode after data-model review.
 
-**States.** Empty timeline (no confirmed items) routes to confirmation instead of rendering inferred chapters. Empty chapter shows Sage placeholder and “Add photos” action. Hidden chapters appear in an `Hidden chapters (n)` disclosure, never silently deleted. If only one chapter is viable, Preview stays enabled and catalog uses one chapter.
+**States.** Empty timeline (no confirmed items) routes to confirmation instead of rendering inferred chapters. Empty chapter shows Sage placeholder and “Add photos” action. Hidden chapters appear in an `Hidden periods (n)` disclosure, never silently deleted; before user expands it, show date/title/count only and no representative image. If only one chapter is viable, Preview stays enabled and catalog uses one chapter.
 
 **A11y.** Axis is decorative; cards announce year, title, selected photo count, hidden state. Reorder has accessible Move earlier/later actions.
 
@@ -108,13 +108,13 @@ Status: design-ready implementation specification, based on `DESIGN_HANDOFF.md` 
 
 ## 09 — Album style and preview
 
-**Purpose / layout.** Back nav / `PREVIEW`; title “A book to keep.” Three `TemplateSwatch` controls: Warm Paper, Quiet Night, Field Notes. Paginated local PDF preview, default cover: `[Name] / A life in moments`; page indicators and previous/next buttons. Unpurchased notice: “Preview pages are watermarked. Cover, contents, and two sample pages are available before unlocking.” Primary `Unlock complete album · $19.99`; secondary `Edit timeline`.
+**Purpose / layout.** Back nav / `PREVIEW`; title “A book to keep.” Three `TemplateSwatch` controls: Warm Paper, Quiet Night, Field Notes. Paginated 5:7 local preview, default cover: `[Name] / A life in moments`; page indicators and previous/next buttons. Unpurchased notice: “Every page in this preview is watermarked. It is built from the photos currently included in your album.” Primary `Unlock complete album · $19.99`; secondary `Edit timeline`.
 
-**Interaction.** Template switch immediately updates sample. Page carousel supports buttons and swipe, with visible page count. Free state locks beyond approved samples with a clearly labelled locked page. Purchased state changes primary to `Generate full PDF` and removes watermark after render—not merely overlay hide.
+**Interaction.** Template switch immediately rerenders the sample. Page carousel supports buttons and swipe, with visible page count. Free state renders 6–8 pages from eligible real user photos: cover, contents, at least two different-period chapter/selection pairs where available, and closing page. When photos/periods are insufficient it renders an explicit explanation page rather than fabricating or duplicating images. Every rendered free page carries a repeated `TAILOR · PREVIEW` watermark. Purchased state changes primary to `Generate full PDF` and rerenders the same user-approved content without watermark—not merely overlay hide.
 
 **States.** Preview render in progress: skeleton paper pages and “Preparing your preview…”; failure: ErrorCard with `Try again` / `Return to timeline`, preserving template. If title/name is long, cover layout scales or wraps, then reduces title style before clipping **[Assumption: export typography fallback tested in PDF renderer]**.
 
-**A11y.** Swatches selected trait. Preview page labels (“Preview page 2 of 4, watermarked sample”) and controls work without swipe. Watermark is decorative in VO.
+**A11y.** Swatches selected trait. Preview page labels (“Preview page 2 of 7, watermarked sample”) and controls work without swipe. Watermark is decorative in VO.
 
 ## 10 — One-time purchase
 

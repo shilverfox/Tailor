@@ -24,7 +24,20 @@ struct DemoPetScanService: PetScanServicing {
 
 actor DemoPurchaseService: PurchaseServicing {
     private var entitled = false
-    func purchaseUnlock() async throws -> PurchaseState { entitled = true; return .entitled }
+    func purchaseUnlock() async throws -> PurchaseState {
+        let arguments = ProcessInfo.processInfo.arguments
+        let state = arguments.firstIndex(of: "-uiDemoState").flatMap { index in
+            arguments.indices.contains(index + 1) ? arguments[index + 1] : nil
+        } ?? ""
+        switch state {
+        case "purchase-cancelled": return .cancelled
+        case "purchase-pending": return .pending
+        case "purchase-failed": return .failed("The Tailor unlock is not available right now.")
+        default:
+            entitled = true
+            return .entitled
+        }
+    }
     func restorePurchases() async throws -> PurchaseState { entitled ? .restored : .idle }
     func isEntitled() async -> Bool { entitled }
 }

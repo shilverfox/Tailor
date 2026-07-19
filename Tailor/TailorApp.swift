@@ -5,7 +5,12 @@ struct TailorApp: App {
     private let container: AppContainer
 
     init() {
-        container = AppContainer.makeProduction()
+        // UI automation must exercise the same feature flow without reaching
+        // Photos, StoreKit, or a persisted user archive. The app remains on
+        // production services for every normal launch.
+        container = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+            ? AppContainer.demo
+            : AppContainer.makeProduction()
     }
 
     var body: some Scene {
@@ -14,7 +19,7 @@ struct TailorApp: App {
 }
 
 enum AppRoute: Int, CaseIterable, Hashable {
-    case welcome, privacy, profile, references, scan, confirm, timeline, chapter, preview, purchase, export, archive
+    case welcome, privacy, profile, references, scan, confirm, timeline, chapter, editor, preview, purchase, export, archive
 }
 
 struct DemoChapter: Identifiable {
@@ -52,7 +57,8 @@ private struct RootView: View {
                 case .scan: ScanView(progress: $scanProgress, next: advance, back: retreat)
                 case .confirm: ConfirmView(name: petName, next: advance, back: retreat)
                 case .timeline: TimelineView(name: petName, chapters: $chapters, edit: { step = .chapter }, next: advance, back: retreat)
-                case .chapter: ChapterView(chapter: $chapters[0], back: { step = .timeline }, next: { step = .preview })
+                case .chapter: ChapterView(chapter: $chapters[0], back: { step = .timeline }, next: { step = .editor })
+                case .editor: PreviewView(style: $selectedStyle, purchased: purchased, next: { step = .preview }, back: retreat)
                 case .preview: PreviewView(style: $selectedStyle, purchased: purchased, next: { step = purchased ? .export : .purchase }, back: retreat)
                 case .purchase: PurchaseView(purchase: { purchased = true; step = .export }, back: retreat)
                 case .export: ExportView(name: petName, done: { step = .archive }, back: retreat)
@@ -170,7 +176,7 @@ private struct TimelineView: View {
     var body: some View { Screen(title: "\(name)’s life, in moments.", eyebrow: "Timeline", back: back) {
         Text("Made from photos you chose. You can change every chapter.").foregroundStyle(TailorTheme.ink.opacity(0.72))
         ForEach(chapters) { chapter in Button(action: edit) { HStack(spacing: 16) { Image(systemName: chapter.image).font(.title2).foregroundStyle(TailorTheme.clay).frame(width: 48, height: 60).background(TailorTheme.mist).clipShape(RoundedRectangle(cornerRadius: 14)); VStack(alignment: .leading) { Text(chapter.year).font(.caption.weight(.bold)).foregroundStyle(TailorTheme.clay); Text(chapter.title).font(.headline).foregroundStyle(TailorTheme.ink); Text("\(chapter.count) selected photos").font(.caption).foregroundStyle(TailorTheme.ink.opacity(0.6)) }; Spacer(); Image(systemName: "chevron.right").foregroundStyle(TailorTheme.ink.opacity(0.5)) }.padding(10).background(.white.opacity(0.6)).clipShape(RoundedRectangle(cornerRadius: 18)) } }
-        PrimaryButton(title: "Preview album", action: next)
+        PrimaryButton(title: "Edit album", action: next)
     } }
 }
 

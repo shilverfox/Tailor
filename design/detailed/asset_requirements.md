@@ -35,6 +35,12 @@ Use right.codes `gpt-image-2` only after brand/legal review. Submit asynchronous
 | Timeline/chapters | User-confirmed thumbnail, 1:1 cover; original retained as source. | Neutral placeholder if selected cover removed. |
 | PDF pages | User-confirmed original rendered at appropriate print resolution. | Generated editorial assets never substitute for a photo. |
 
+### v1.1 selection safety additions
+
+- Sensitive, `neverUse`, and date-range-hidden assets have no asset-catalog equivalent and must not be copied into a preview/PDF cache. They are runtime eligibility states on the user-authorized `PHAsset` only.
+- Free previews use the same real, currently eligible photos as the archive. The repeated `TAILOR · PREVIEW` watermark is native drawn text, not a supplied raster and not a blur substitute.
+- See `v1_1_resource_manifest.md` for the authoritative v1.1 resource output/non-output list.
+
 ## No-export list
 
 Do not create custom illustrations for standard UI icons, photo permission, scanning, purchase, errors, sharing, or delete confirmation. Those surfaces use SF Symbols and semantic color so they work with Dynamic Type, contrast modes, and localization.

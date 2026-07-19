@@ -21,11 +21,12 @@
 		A0000000000000000000002B /* AlbumFeatureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003B /* AlbumFeatureViews.swift */; };
 		A0000000000000000000002C /* MilestoneRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003C /* MilestoneRootView.swift */; };
 		A0000000000000000000002E /* Resources/Editorial in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003E /* Resources/Editorial */; };
-		A00000000000000000000052 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* LaunchScreen.storyboard */; };
+		A0000000000000000000002F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003D /* Assets.xcassets */; };
 		A0000000000000000000004A /* PhotoLibraryAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004C /* PhotoLibraryAccess.swift */; };
 		A0000000000000000000004B /* SwiftDataArchiveRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004D /* SwiftDataArchiveRepository.swift */; };
 		A0000000000000000000004E /* ProductionServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000004F /* ProductionServices.swift */; };
 		A00000000000000000000050 /* PhotoKitVisionScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000051 /* PhotoKitVisionScanner.swift */; };
+		A00000000000000000000052 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* LaunchScreen.storyboard */; };
 		B00000000000000000000001 /* TailorFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* TailorFeatureTests.swift */; };
 		C00000000000000000000001 /* TailorOnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000002 /* TailorOnboardingUITests.swift */; };
 		D00000000000000000000002 /* Tailor.storekit in Resources */ = {isa = PBXBuildFile; fileRef = D00000000000000000000001 /* Tailor.storekit */; };
@@ -65,11 +66,11 @@
 		A0000000000000000000003C /* MilestoneRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MilestoneRootView.swift; sourceTree = "<group>"; };
 		A0000000000000000000003D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A0000000000000000000003E /* Resources/Editorial */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Editorial; sourceTree = "<group>"; };
-		A00000000000000000000053 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		A0000000000000000000004C /* PhotoLibraryAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryAccess.swift; sourceTree = "<group>"; };
 		A0000000000000000000004D /* SwiftDataArchiveRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataArchiveRepository.swift; sourceTree = "<group>"; };
 		A0000000000000000000004F /* ProductionServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductionServices.swift; sourceTree = "<group>"; };
 		A00000000000000000000051 /* PhotoKitVisionScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitVisionScanner.swift; sourceTree = "<group>"; };
+		A00000000000000000000053 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B00000000000000000000002 /* TailorFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorFeatureTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* TailorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00000000000000000000002 /* TailorOnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorOnboardingUITests.swift; sourceTree = "<group>"; };
@@ -307,6 +308,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A0000000000000000000002F /* Assets.xcassets in Resources */,
 				A0000000000000000000002E /* Resources/Editorial in Resources */,
 				A00000000000000000000052 /* LaunchScreen.storyboard in Resources */,
 			);
@@ -416,9 +418,11 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_CFBundleDisplayName = Tailor;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Tailor only scans photos you allow to help you create a private life archive.";
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype;
@@ -435,9 +439,11 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 926LNM5DUS;
 				GENERATE_INFOPLIST_FILE = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_CFBundleDisplayName = Tailor;
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Tailor only scans photos you allow to help you create a private life archive.";
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype;
@@ -481,7 +487,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 926LNM5DUS;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.uitests;
@@ -495,7 +501,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 926LNM5DUS;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.uitests;

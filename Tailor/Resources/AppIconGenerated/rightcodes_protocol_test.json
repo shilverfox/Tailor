@@ -1,0 +1,25 @@
+{
+  "started_at": "2026-07-15T10:30:37.041809+00:00",
+  "endpoint": "https://www.right.codes/draw/v1/images/generations",
+  "model": "gpt-image-2",
+  "size": "1024x1024",
+  "transport": "verified",
+  "submission": {
+    "task_id": "task_07783405610b45b7b724211f6290c880",
+    "status": "processing",
+    "progress": 0,
+    "message": "任务id: task_07783405610b45b7b724211f6290c880，任务还在处理中，请稍后到异步任务中查看结果"
+  },
+  "last_status": {
+    "created": 1784111495,
+    "data": [
+      {
+        "url": "https://file1.aitohumanize.com/file/6d754c9c23124ae0bc50f75dd10793a0.png"
+      }
+    ]
+  },
+  "outcome": "completed",
+  "image_path": "/Users/lijian15/iosWork/Tailor/Tailor/Resources/AppIconGenerated/rightcodes_protocol_test.png",
+  "task_id": "task_07783405610b45b7b724211f6290c880",
+  "finished_at": "2026-07-15T10:31:40.997644+00:00"
+}
