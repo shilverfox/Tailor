@@ -8,9 +8,13 @@ struct TailorApp: App {
         // UI automation must exercise the same feature flow without reaching
         // Photos, StoreKit, or a persisted user archive. The app remains on
         // production services for every normal launch.
+        #if DEBUG
         container = ProcessInfo.processInfo.arguments.contains("-uiTesting")
             ? AppContainer.demo
             : AppContainer.makeProduction()
+        #else
+        container = AppContainer.makeProduction()
+        #endif
     }
 
     var body: some Scene {

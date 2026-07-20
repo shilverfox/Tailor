@@ -1,9 +1,12 @@
 import SwiftUI
+import Photos
+import Vision
+import ImageIO
 
 struct MilestoneRootView: View {
     @EnvironmentObject private var container: AppContainer
     @Environment(\.scenePhase) private var scenePhase
-    @State private var route: AppRoute = .welcome; @State private var scope: PhotoAccessScope = .notDetermined; @State private var name = "Milo"; @State private var species: PetSpecies = .dog; @State private var year = "2024"; @State private var referenceAssetIdentifiers: [String] = []; @State private var profileID = UUID(); @State private var restoredDraft = false; @State private var hasSavedArchive = false; @State private var scanProgress = 0.0; @State private var scanCompletedAssets = 0; @State private var scanTotalAssets = 0; @State private var scanMatchCount = 0; @State private var paused = false; @State private var isScanning = false; @State private var scanDisplayState = ""; @State private var scanTask: Task<Void, Never>?; @State private var style: AlbumStyle = .warmPaper; @State private var pageSize: PDFPageSize = .letter; @State private var selectedChapterID: UUID?; @State private var purchased = false; @State private var isPurchasing = false; @State private var document: ArchiveDocument?; @State private var memoryBook: MemoryBookDocument?; @State private var operationError: String?; @State private var purchaseNotice: String?; @State private var exportURL: URL?; @State private var videoURL: URL?; @State private var isExporting = false; @State private var exportCompletedPages = 0; @State private var exportTotalPages = 0; @State private var exportTask: Task<Void, Never>?; @State private var didInitializeRoot = false; @StateObject private var photoLibrary = PhotoLibraryAccess()
+    @State private var route: AppRoute = .welcome; @State private var scope: PhotoAccessScope = .notDetermined; @State private var name = "Milo"; @State private var species: PetSpecies = .dog; @State private var year = "2024"; @State private var referenceAssetIdentifiers: [String] = []; @State private var profileID = UUID(); @State private var restoredDraft = false; @State private var hasSavedArchive = false; @State private var scanProgress = 0.0; @State private var scanCompletedAssets = 0; @State private var scanTotalAssets = 0; @State private var scanMatchCount = 0; @State private var paused = false; @State private var isScanning = false; @State private var scanDisplayState = ""; @State private var scanTask: Task<Void, Never>?; @State private var style: AlbumStyle = .warmPaper; @State private var pageSize: PDFPageSize = .letter; @State private var selectedChapterID: UUID?; @State private var purchased = false; @State private var isPurchasing = false; @State private var document: ArchiveDocument?; @State private var memoryBook: MemoryBookDocument?; @State private var operationError: String?; @State private var purchaseNotice: String?; @State private var exportURL: URL?; @State private var videoURL: URL?; @State private var isExporting = false; @State private var exportCompletedPages = 0; @State private var exportTotalPages = 0; @State private var exportTask: Task<Void, Never>?; @State private var didInitializeRoot = false; @State private var realPhotoQADiagnostic = "not-started"; @StateObject private var photoLibrary = PhotoLibraryAccess()
 
     var body: some View { Group { switch route {
     case .welcome: WelcomeFeatureView(hasSavedArchive: hasSavedArchive, next: advance, openArchives: { go(.archive) })
@@ -21,10 +24,22 @@ struct MilestoneRootView: View {
     case .archive: ArchivesFeatureView(name: name, pdfURL: storedPDFURL, exportRecord: latestExportRecord, openArchive: { ensureMemoryBook(); go(.preview) }, rescan: rescanArchive, restart: restartArchive, delete: deleteArchive)
     } }
     .animation(.easeInOut(duration: 0.2), value: route)
+    .overlay(alignment: .topLeading) {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiRealPhotoQA") {
+            Text(realPhotoQADiagnostic)
+                .font(.system(size: 1))
+                .frame(width: 1, height: 1)
+                .clipped()
+                .accessibilityIdentifier("M7 real photo diagnostic")
+        }
+        #endif
+    }
     .task {
         guard !didInitializeRoot else { return }
         didInitializeRoot = true
         guard !configureUITestDemoIfRequested() else { return }
+        guard !(await configureRealPhotoQAIfRequested()) else { return }
         await restoreLatestDraftIfNeeded()
         if isPurchaseBypassed { purchased = true }
         else { purchased = await container.purchase.isEntitled() }
@@ -116,6 +131,9 @@ struct MilestoneRootView: View {
     /// content so every product screen can be rendered without Photos, Vision, or StoreKit.
     /// Production launches never enter this branch.
     private func configureUITestDemoIfRequested() -> Bool {
+        #if !DEBUG
+        return false
+        #else
         let arguments = ProcessInfo.processInfo.arguments
         let routes: [String: AppRoute] = [
             "welcome": .welcome, "privacy": .privacy, "profile": .profile, "references": .references,
@@ -154,7 +172,20 @@ struct MilestoneRootView: View {
             referenceAssetIdentifiers: ["ui-reference-1", "ui-reference-2", "ui-reference-3"],
             albumStyle: demoStyle
         )
-        let firstPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!, assetLocalIdentifier: demoState.hasPrefix("crop-") ? "ui-timeline-photo-0-\(demoState)" : "ui-photo-1", decision: .selected, confidence: 0.96, createdAt: .now, pixelSize: demoState == "crop-landscape" ? CGSize(width: 1_600, height: 900) : ((demoState == "crop-portrait-plus15" || demoState == "crop-portrait-minus15") ? CGSize(width: 900, height: 1_600) : (demoState == "crop-square-plus15" ? CGSize(width: 1_200, height: 1_200) : nil)))
+        let isFocalCropFixture = demoState == "crop-landscape-focal-right"
+        let firstPhoto = ArchivePhoto(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000011")!,
+            assetLocalIdentifier: demoState.hasPrefix("crop-") ? "ui-timeline-photo-0-\(demoState)" : "ui-photo-1",
+            decision: .selected,
+            confidence: 0.96,
+            createdAt: .now,
+            pixelSize: demoState.hasPrefix("crop-landscape")
+                ? CGSize(width: 1_600, height: 900)
+                : ((demoState == "crop-portrait-plus15" || demoState == "crop-portrait-minus15")
+                    ? CGSize(width: 900, height: 1_600)
+                    : (demoState == "crop-square-plus15" ? CGSize(width: 1_200, height: 1_200) : nil)),
+            subjectRegion: isFocalCropFixture ? CGRect(x: 0.72, y: 0.30, width: 0.20, height: 0.34) : nil
+        )
         let uncertainPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000012")!, assetLocalIdentifier: "ui-photo-2", decision: .needsReview, confidence: 0.62, createdAt: .now)
         let excludedPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000013")!, assetLocalIdentifier: "ui-photo-3", decision: .excluded, confidence: 0.22, createdAt: .now)
         let chapter = Chapter(id: UUID(uuidString: "00000000-0000-0000-0000-000000000021")!, title: "Days together", dateLabel: "2018–2024", photoIDs: [firstPhoto.id], isHidden: false, sortOrder: 0)
@@ -178,7 +209,7 @@ struct MilestoneRootView: View {
         }
         if [.timeline, .chapter, .editor, .preview, .purchase, .export, .archive].contains(requestedRoute) {
             let cropFixtureSize: CGSize? = switch demoState {
-            case "crop-landscape": CGSize(width: 1_600, height: 900)
+            case "crop-landscape", "crop-landscape-focal-right": CGSize(width: 1_600, height: 900)
             case "crop-portrait-plus15", "crop-portrait-minus15": CGSize(width: 900, height: 1_600)
             case "crop-square-plus15": CGSize(width: 1_200, height: 1_200)
             default: nil
@@ -307,7 +338,142 @@ struct MilestoneRootView: View {
         container.router.reset()
         if requestedRoute != .welcome { container.router.navigate(to: requestedRoute) }
         return true
+        #endif
     }
+
+    /// Debug-only bridge from the simulator's real Photos library into the
+    /// normal book/editor renderer. Unlike the deterministic UI fixtures this
+    /// keeps PhotoKit identifiers and source pixels intact. It is intentionally
+    /// The asset reads are synchronous only after the normal system permission
+    /// boundary has completed because the four local QA assets are downloaded.
+    private func configureRealPhotoQAIfRequested() async -> Bool {
+        #if !DEBUG
+        return false
+        #else
+        guard ProcessInfo.processInfo.arguments.contains("-uiRealPhotoQA") else { return false }
+        var authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        realPhotoQADiagnostic = "authorization=\(authorization.rawValue);requesting=\(authorization == .notDetermined)"
+        if authorization == .notDetermined {
+            authorization = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        }
+        let fetched = PHAsset.fetchAssets(with: .image, options: nil)
+        realPhotoQADiagnostic = "authorization=\(authorization.rawValue);assets=\(fetched.count)"
+        var inputs: [(name: String, asset: PHAsset)] = []
+        fetched.enumerateObjects { asset, _, _ in
+            let name = PHAssetResource.assetResources(for: asset).first?.originalFilename ?? asset.localIdentifier
+            if (name as NSString).pathExtension.lowercased() == "png" {
+                inputs.append((name, asset))
+            }
+        }
+        inputs.sort {
+            let leftDate = $0.asset.creationDate ?? .distantPast
+            let rightDate = $1.asset.creationDate ?? .distantPast
+            return leftDate == rightDate
+                ? $0.asset.localIdentifier < $1.asset.localIdentifier
+                : leftDate < rightDate
+        }
+        var uniqueInputs: [(name: String, asset: PHAsset)] = []
+        var seenImageData = Set<Data>()
+        for input in inputs.reversed() {
+            guard let data = realPhotoQAImageData(for: input.asset), seenImageData.insert(data).inserted else { continue }
+            uniqueInputs.append(input)
+            if uniqueInputs.count == 4 { break }
+        }
+        inputs = Array(uniqueInputs.reversed())
+        guard inputs.count == 4 else {
+            realPhotoQADiagnostic += ";png=\(inputs.count);selected=0"
+            return false
+        }
+        realPhotoQADiagnostic += ";pngUnique=\(inputs.count);selected=\(inputs.count)"
+
+        let qaProfile = PetProfile(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000009001")!,
+            name: "Milo",
+            species: .dog,
+            arrivalYear: 2017,
+            departureYear: 2024,
+            lifecycle: .ready,
+            albumStyle: .warmPaper
+        )
+        let qaPhotos = inputs.enumerated().map { index, input in
+            ArchivePhoto(
+                id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 9_100 + index))!,
+                assetLocalIdentifier: input.asset.localIdentifier,
+                decision: .selected,
+                confidence: 1,
+                createdAt: input.asset.creationDate ?? Date(timeIntervalSince1970: 1_704_067_200 + TimeInterval(index * 86_400)),
+                pixelSize: CGSize(width: input.asset.pixelWidth, height: input.asset.pixelHeight),
+                subjectRegion: realPhotoQASubjectRegion(for: input.asset)
+            )
+        }
+        let focalRegions = qaPhotos.enumerated().map { index, photo in
+            guard let region = photo.subjectRegion else { return "p\(index)=none" }
+            return String(format: "p%d=%.3f,%.3f", index, region.midX, region.midY)
+        }.joined(separator: "|")
+        let qaChapter = Chapter(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000009201")!,
+            title: "Days together",
+            dateLabel: "Photorealistic QA",
+            photoIDs: qaPhotos.map(\.id),
+            isHidden: false,
+            sortOrder: 0
+        )
+        let qaBook = MemoryBookBuilder.build(
+            profile: qaProfile,
+            photos: qaPhotos,
+            chapters: [qaChapter],
+            style: .warmPaper,
+            pageSize: .letter
+        )
+        let cropOffsets = qaBook.pages
+            .flatMap(\.elements)
+            .filter { element in element.kind == .image && qaPhotos.contains(where: { $0.id == element.assetID }) }
+            .map { String(format: "%.3f,%.3f", $0.cropOffset.width, $0.cropOffset.height) }
+            .joined(separator: "|")
+        realPhotoQADiagnostic += ";focal=\(focalRegions);offsets=\(cropOffsets)"
+        profileID = qaProfile.id
+        name = qaProfile.name
+        species = qaProfile.species
+        year = String(qaProfile.departureYear)
+        scope = .full
+        style = qaBook.style
+        pageSize = qaBook.pageSize
+        selectedChapterID = qaChapter.id
+        document = ArchiveDocument(profile: qaProfile, photos: qaPhotos, chapters: [qaChapter], memoryBook: qaBook)
+        memoryBook = qaBook
+        purchased = true
+        route = .editor
+        container.router.reset()
+        container.router.navigate(to: .editor)
+        return true
+        #endif
+    }
+
+    #if DEBUG
+    private func realPhotoQAImageData(for asset: PHAsset) -> Data? {
+        let options = PHImageRequestOptions()
+        options.isSynchronous = true
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = false
+        var result: Data?
+        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, _ in
+            result = data
+        }
+        return result
+    }
+
+    private func realPhotoQASubjectRegion(for asset: PHAsset) -> CGRect? {
+        guard let data = realPhotoQAImageData(for: asset),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        do {
+            return try VisionFocalRegionDetector.animalRecognition(in: cgImage, preferredSpecies: nil).subjectRegion
+        } catch {
+            realPhotoQADiagnostic += ";visionError=\(error.localizedDescription)"
+            return nil
+        }
+    }
+    #endif
 
     private func saveDraft() async {
         let profile = PetProfile(
@@ -452,6 +618,20 @@ struct MilestoneRootView: View {
                     built.pages[pageIndex].elements[captionIndex].text = "A safe place to land."
                     built.pages[pageIndex].elements[captionIndex].textStyle = .standard
                     built.pages[pageIndex].elements[captionIndex].normalizedFrame = CGRect(x: 0.12, y: 0.42, width: 0.44, height: 0.12)
+                }
+                if fixture == "text-low-contrast",
+                   let pageIndex = built.pages.firstIndex(where: { $0.kind == .photoSelection }),
+                   let titleIndex = built.pages[pageIndex].elements.firstIndex(where: { $0.textField == .photoTitle }) {
+                    let paper = MemoryBookRGB(red: 0.97, green: 0.93, blue: 0.84)
+                    built.pages[pageIndex].backgroundColor = paper
+                    built.pages[pageIndex].elements[titleIndex].textCustomColor = paper
+                }
+                if fixture == "composition-near-align",
+                   let pageIndex = built.pages.firstIndex(where: { $0.kind == .photoSelection }),
+                   let titleIndex = built.pages[pageIndex].elements.firstIndex(where: { $0.textField == .photoTitle }) {
+                    built.pages[pageIndex].elements[titleIndex].normalizedFrame.origin.x = 0.092
+                    built.pages[pageIndex].elements[titleIndex].isLayoutLocked = true
+                    built.pages[pageIndex].elements[titleIndex].origin = .user
                 }
             }
             memoryBook = built

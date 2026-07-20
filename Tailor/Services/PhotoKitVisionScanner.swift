@@ -3,6 +3,7 @@ import Photos
 import UIKit
 import Vision
 import CryptoKit
+import CoreImage
 
 /// Pure scan policies deliberately live outside PhotoKit/Vision so recovery
 /// rules can be exercised without manufacturing ML results in tests.
@@ -216,6 +217,106 @@ enum VisualDuplicatePolicy {
     }
 }
 
+struct VisionAnimalRecognitionResult {
+    let confidence: Double
+    let subjectRegion: CGRect?
+}
+
+/// Composition evidence is deliberately separate from identity evidence.
+/// Animal recognition remains the first choice, while attention saliency is
+/// only a framing fallback when Vision cannot label the subject. The fallback
+/// never changes scan inclusion, identity scores, or auto-selection gates.
+enum VisionFocalRegionDetector {
+    static func animalRecognition(in image: CGImage, preferredSpecies: PetSpecies?) throws -> VisionAnimalRecognitionResult {
+        let request = VNRecognizeAnimalsRequest()
+        let handler = VNImageRequestHandler(cgImage: image)
+        try handler.perform([request])
+        let keyword = preferredSpecies.map { $0 == .dog ? "dog" : "cat" }
+        let candidates = (request.results ?? []).compactMap { observation -> (confidence: Double, region: CGRect)? in
+            let labels = observation.labels.filter { label in
+                guard let keyword else { return true }
+                return label.identifier.lowercased().contains(keyword)
+            }
+            guard let label = labels.max(by: { $0.confidence < $1.confidence }) else { return nil }
+            return (Double(label.confidence), FocalCropPolicy.topLeftRegion(fromVisionBoundingBox: observation.boundingBox))
+        }
+        if let best = candidates.max(by: { $0.confidence < $1.confidence }) {
+            return VisionAnimalRecognitionResult(confidence: best.confidence, subjectRegion: best.region)
+        }
+        // A production scan with a requested species must stop here. Running
+        // two saliency models for every landscape, screenshot, or wrong-species
+        // photo would multiply the cost of a large-library scan without making
+        // that rejected asset eligible. Generic callers (such as the isolated
+        // framing QA route) may still ask for composition-only fallback data.
+        guard preferredSpecies == nil else {
+            return VisionAnimalRecognitionResult(confidence: 0, subjectRegion: nil)
+        }
+        return VisionAnimalRecognitionResult(confidence: 0, subjectRegion: try? salientRegion(in: image))
+    }
+
+    private static func salientRegion(in image: CGImage) throws -> CGRect? {
+        let attention = VNGenerateAttentionBasedSaliencyImageRequest()
+        try VNImageRequestHandler(cgImage: image).perform([attention])
+        var observations = attention.results ?? []
+        var objects = observations.flatMap { $0.salientObjects ?? [] }
+        if objects.isEmpty {
+            let objectness = VNGenerateObjectnessBasedSaliencyImageRequest()
+            try VNImageRequestHandler(cgImage: image).perform([objectness])
+            observations += objectness.results ?? []
+            objects = observations.flatMap { $0.salientObjects ?? [] }
+        }
+        if let best = objects.max(by: {
+            Double($0.confidence) * Double($0.boundingBox.width) * Double($0.boundingBox.height)
+                < Double($1.confidence) * Double($1.boundingBox.width) * Double($1.boundingBox.height)
+        }) {
+            return FocalCropPolicy.topLeftRegion(fromVisionBoundingBox: best.boundingBox)
+        }
+        return heatmapRegion(from: observations)
+    }
+
+    private static func heatmapRegion(from observations: [VNSaliencyImageObservation]) -> CGRect? {
+        guard let pixelBuffer = observations.first?.pixelBuffer else { return nil }
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        let width = max(1, Int(image.extent.width.rounded()))
+        let height = max(1, Int(image.extent.height.rounded()))
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        CIContext(options: [.cacheIntermediates: false]).render(
+            image,
+            toBitmap: &pixels,
+            rowBytes: width * 4,
+            bounds: image.extent,
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+        var total = 0.0
+        var weightedX = 0.0
+        var weightedY = 0.0
+        var minimum = UInt8.max
+        var maximum = UInt8.min
+        for y in 0..<height {
+            for x in 0..<width {
+                let value = pixels[(y * width + x) * 4]
+                minimum = min(minimum, value)
+                maximum = max(maximum, value)
+                let weight = Double(value)
+                total += weight
+                weightedX += (Double(x) + 0.5) * weight
+                weightedY += (Double(y) + 0.5) * weight
+            }
+        }
+        guard total > 0, Int(maximum) - Int(minimum) >= 4 else { return nil }
+        let centre = CGPoint(
+            x: weightedX / total / Double(width),
+            // Core Image exposes the saliency buffer in bottom-left image
+            // coordinates; Tailor persists top-left source coordinates.
+            y: 1 - weightedY / total / Double(height)
+        )
+        return FocalCropPolicy.normalizedSubjectRegion(
+            CGRect(x: centre.x - 0.15, y: centre.y - 0.15, width: 0.30, height: 0.30)
+        )
+    }
+}
+
 struct PhotoKitVisionScanner: PetScanServicing {
     // These thresholds are deliberately conservative: a false inclusion is
     // more harmful to a memorial archive than asking the user to review one
@@ -298,7 +399,7 @@ struct PhotoKitVisionScanner: PetScanServicing {
                     await onProgress(ScanCheckpoint(nextAssetIndex: index + 1, totalAssets: assets.count, candidates: candidates, assetCatalogFingerprint: catalog.fingerprint, auditMetrics: auditMetrics, processedAssetIdentifiers: processedAssetIdentifiers))
                     continue
                 }
-                guard let animalConfidence = try? animalConfidence(in: cgImage, species: profile.species) else {
+                guard let animalRecognition = try? animalRecognition(in: cgImage, species: profile.species) else {
                     auditMetrics.animalVisionFailures += 1
                     await onProgress(ScanCheckpoint(nextAssetIndex: index + 1, totalAssets: assets.count, candidates: candidates, assetCatalogFingerprint: catalog.fingerprint, auditMetrics: auditMetrics, processedAssetIdentifiers: processedAssetIdentifiers))
                     continue
@@ -308,6 +409,7 @@ struct PhotoKitVisionScanner: PetScanServicing {
                 // Continuing into feature-print generation would run the
                 // expensive embedding model for every landscape, person, and
                 // screenshot in a large library.
+                let animalConfidence = animalRecognition.confidence
                 guard ScanWorkloadPolicy.shouldGenerateEmbedding(animalConfidence: animalConfidence) else {
                     auditMetrics.speciesRejected += 1
                     await onProgress(ScanCheckpoint(nextAssetIndex: index + 1, totalAssets: assets.count, candidates: candidates, assetCatalogFingerprint: catalog.fingerprint, auditMetrics: auditMetrics, processedAssetIdentifiers: processedAssetIdentifiers))
@@ -377,6 +479,7 @@ struct PhotoKitVisionScanner: PetScanServicing {
                         referenceCount: assessment.referenceCount,
                         wasHighAutoSelected: assessment.disposition == .autoSelected
                     ),
+                    subjectRegion: animalRecognition.subjectRegion,
                     visualDuplicateGroupID: duplicateGroupID
                 ))
                 auditMetrics.candidates += 1
@@ -434,12 +537,8 @@ struct PhotoKitVisionScanner: PetScanServicing {
         }
     }
 
-    private func animalConfidence(in image: CGImage, species: PetSpecies) throws -> Double {
-        let request = VNRecognizeAnimalsRequest()
-        let handler = VNImageRequestHandler(cgImage: image)
-        try handler.perform([request])
-        let keyword = species == .dog ? "dog" : "cat"
-        return (request.results ?? []).flatMap(\.labels).first(where: { $0.identifier.lowercased().contains(keyword) }).map { Double($0.confidence) } ?? 0
+    private func animalRecognition(in image: CGImage, species: PetSpecies) throws -> VisionAnimalRecognitionResult {
+        try VisionFocalRegionDetector.animalRecognition(in: image, preferredSpecies: species)
     }
 
     private func featurePrint(for image: CGImage) throws -> VNFeaturePrintObservation {

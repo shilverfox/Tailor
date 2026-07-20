@@ -119,16 +119,16 @@ actor StoreKitPurchaseService: PurchaseServicing {
 struct LocalPDFExporter: PDFExporting {
     private let outputDirectory: URL
     private let imageProvider: any MemoryBookAssetImageProviding
-    private let imageTargetSize: CGSize
+    private let imageTargetSizeOverride: CGSize?
 
     init(
         outputDirectory: URL = .documentsDirectory,
         imageProvider: any MemoryBookAssetImageProviding = PhotoKitMemoryBookAssetImageProvider(),
-        imageTargetSize: CGSize = CGSize(width: 2_400, height: 2_400)
+        imageTargetSize: CGSize? = nil
     ) {
         self.outputDirectory = outputDirectory
         self.imageProvider = imageProvider
-        self.imageTargetSize = imageTargetSize
+        self.imageTargetSizeOverride = imageTargetSize
     }
 
     func export(profile: PetProfile, photos: [ArchivePhoto], chapters: [Chapter], pageSize: PDFPageSize) async throws -> URL {
@@ -190,7 +190,7 @@ struct LocalPDFExporter: PDFExporting {
                 // Explicitly paint both surfaces. Leaving the PDF page transparent
                 // caused black pages in some viewers and made preview/export differ.
                 color(plan.style.backdrop).setFill(); UIBezierPath(rect: plan.pageRect).fill()
-                color(plan.style.paper).setFill(); UIBezierPath(roundedRect: plan.paperRect, cornerRadius: 4).fill()
+                color(plan.paperColor).setFill(); UIBezierPath(roundedRect: plan.paperRect, cornerRadius: 4).fill()
                 // Use the exact PageStyle descriptor consumed by the SwiftUI
                 // canvas.  A missing bundled asset deliberately leaves the
                 // solid paper fallback in place; it must not produce a
@@ -220,10 +220,25 @@ struct LocalPDFExporter: PDFExporting {
                             MemoryBookPDFTextAdapter.attributedString(for: textLayout, color: textColor).draw(in: rect)
                             context.cgContext.restoreGState()
                         }
+                    case .shape:
+                        drawShape(
+                            in: rect,
+                            element: element,
+                            fallbackFill: plan.style.accent,
+                            paperWidth: plan.paperRect.width,
+                            context: context.cgContext
+                        )
                     case .image:
                         guard let photoID = element.assetID,
                               let photo = photoLookup[photoID],
-                              let image = imageProvider.image(identifier: photo.assetLocalIdentifier, targetSize: imageTargetSize)
+                              let image = imageProvider.image(
+                                identifier: photo.assetLocalIdentifier,
+                                targetSize: imageTargetSizeOverride ?? Self.printTargetSize(
+                                    for: rect,
+                                    photo: photo,
+                                    element: element
+                                )
+                              )
                         else {
                             // A Photos asset can remain addressable while its
                             // local bitmap is unavailable.  Never finish a
@@ -231,7 +246,7 @@ struct LocalPDFExporter: PDFExporting {
                             imageUnavailable = true
                             break
                         }
-                        draw(image: processed(image, treatment: plan.style.imageTreatment), in: rect, element: element, context: context.cgContext)
+                        draw(image: MemoryBookImageProcessor.process(image, treatment: plan.style.imageTreatment, adjustments: element.imageAdjustments), in: rect, element: element, paperWidth: plan.paperRect.width, context: context.cgContext)
                         if let borderRect = plan.filmImageBorderRect(in: rect),
                            let lineWidth = plan.filmImageBorderLineWidth(),
                            let cornerRadius = plan.filmImageBorderCornerRadius() {
@@ -269,6 +284,27 @@ struct LocalPDFExporter: PDFExporting {
         return output
     }
 
+    /// Requests enough source pixels for the element's actual 300-DPI printed
+    /// footprint, including aspect-fill excess and committed crop zoom. The
+    /// request is reduced proportionally when the original has fewer pixels;
+    /// the exporter never invents detail by asking PhotoKit to upscale it.
+    static func printTargetSize(
+        for container: CGRect,
+        photo: ArchivePhoto,
+        element: MemoryBookElement,
+        dpi: CGFloat = 300
+    ) -> CGSize {
+        let drawn = MemoryBookPrintQuality.drawnSizeInPoints(container: container, photo: photo, element: element)
+        let pixelScale = max(1, dpi) / 72
+        var target = CGSize(width: drawn.width * pixelScale, height: drawn.height * pixelScale)
+        if let source = photo.pixelSize, source.width > 0, source.height > 0 {
+            let reduction = min(1, source.width / max(1, target.width), source.height / max(1, target.height))
+            target.width *= reduction
+            target.height *= reduction
+        }
+        return CGSize(width: max(1, ceil(target.width)), height: max(1, ceil(target.height)))
+    }
+
     private func color(_ rgb: MemoryBookRGB) -> UIColor { UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1) }
 
     private func drawWatermark(plan: MemoryBookPageRenderPlan, context: CGContext) {
@@ -290,7 +326,7 @@ struct LocalPDFExporter: PDFExporting {
         }
     }
 
-    private func draw(image: UIImage, in container: CGRect, element: MemoryBookElement, context: CGContext) {
+    private func draw(image: UIImage, in container: CGRect, element: MemoryBookElement, paperWidth: CGFloat, context: CGContext) {
         guard let cgImage = image.cgImage else { return }
         context.saveGState()
         // Rotate the image element first, then clip and draw inside its local
@@ -299,7 +335,24 @@ struct LocalPDFExporter: PDFExporting {
         context.translateBy(x: container.midX, y: container.midY)
         context.rotate(by: CGFloat(element.rotationDegrees * .pi / 180))
         context.translateBy(x: -container.midX, y: -container.midY)
-        UIBezierPath(roundedRect: container, cornerRadius: 4).addClip()
+        let cornerRadius = element.appearance.cornerRadiusRatio * paperWidth
+        let maskPath = elementMaskPath(element.appearance.mask, rect: container, cornerRadius: cornerRadius)
+        context.setAlpha(element.appearance.opacity)
+        context.setShadow(
+            offset: CGSize(
+                width: element.appearance.shadowOffset.width * paperWidth,
+                height: element.appearance.shadowOffset.height * paperWidth
+            ),
+            blur: element.appearance.shadowBlurRatio * paperWidth,
+            color: UIColor.black.withAlphaComponent(element.appearance.shadowOpacity).cgColor
+        )
+        // Composite the clipped image and its border as one layer so opacity
+        // and shadow match the SwiftUI element rather than affecting pixels
+        // inside the crop independently.
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.saveGState()
+        context.addPath(maskPath.cgPath)
+        context.clip()
         var contentElement = element
         contentElement.rotationDegrees = 0
         let geometry = MemoryBookImageTransformGeometry(
@@ -307,19 +360,76 @@ struct LocalPDFExporter: PDFExporting {
             sourceAspect: CGFloat(cgImage.width) / max(1, CGFloat(cgImage.height)),
             element: contentElement
         )
+        context.translateBy(x: container.midX, y: container.midY)
+        context.rotate(by: CGFloat(geometry.rotationDegrees * .pi / 180))
+        context.scaleBy(x: geometry.flipHorizontal ? -1 : 1, y: geometry.flipVertical ? -1 : 1)
+        context.translateBy(x: -container.midX, y: -container.midY)
         image.draw(in: geometry.sourceRect(sourcePixelSize: CGSize(width: cgImage.width, height: cgImage.height)))
+        context.restoreGState()
+        if element.appearance.borderStyle != .none {
+            context.setStrokeColor(color(element.appearance.borderColor).cgColor)
+            context.setLineWidth(element.appearance.borderWidthRatio * paperWidth)
+            context.setLineDash(phase: 0, lengths: element.appearance.borderStyle == .dashed ? [6 / 612 * paperWidth, 4 / 612 * paperWidth] : [])
+            context.addPath(maskPath.cgPath)
+            context.strokePath()
+        }
+        context.endTransparencyLayer()
         context.restoreGState()
     }
 
-    private func processed(_ image: UIImage, treatment: MemoryBookImageTreatment) -> UIImage {
-        guard treatment == .mono, let cgImage = image.cgImage else { return image }
-        let input = CIImage(cgImage: cgImage)
-        guard let filter = CIFilter(name: "CIPhotoEffectMono") else { return image }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        guard let output = filter.outputImage,
-              let rendered = CIContext().createCGImage(output, from: output.extent) else { return image }
-        return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
+    private func drawShape(
+        in container: CGRect,
+        element: MemoryBookElement,
+        fallbackFill: MemoryBookRGB,
+        paperWidth: CGFloat,
+        context: CGContext
+    ) {
+        context.saveGState()
+        context.translateBy(x: container.midX, y: container.midY)
+        context.rotate(by: CGFloat(element.rotationDegrees * .pi / 180))
+        context.translateBy(x: -container.midX, y: -container.midY)
+        let cornerRadius = element.appearance.cornerRadiusRatio * paperWidth
+        let maskPath = elementMaskPath(element.appearance.mask, rect: container, cornerRadius: cornerRadius)
+        context.setAlpha(element.appearance.opacity)
+        context.setShadow(
+            offset: CGSize(
+                width: element.appearance.shadowOffset.width * paperWidth,
+                height: element.appearance.shadowOffset.height * paperWidth
+            ),
+            blur: element.appearance.shadowBlurRatio * paperWidth,
+            color: UIColor.black.withAlphaComponent(element.appearance.shadowOpacity).cgColor
+        )
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.setFillColor(color(element.appearance.fillColor ?? fallbackFill).cgColor)
+        context.addPath(maskPath.cgPath)
+        context.fillPath()
+        if element.appearance.borderStyle != .none {
+            context.setStrokeColor(color(element.appearance.borderColor).cgColor)
+            context.setLineWidth(element.appearance.borderWidthRatio * paperWidth)
+            context.setLineDash(
+                phase: 0,
+                lengths: element.appearance.borderStyle == .dashed
+                    ? [6 / 612 * paperWidth, 4 / 612 * paperWidth]
+                    : []
+            )
+            context.addPath(maskPath.cgPath)
+            context.strokePath()
+        }
+        context.endTransparencyLayer()
+        context.restoreGState()
     }
+
+    private func elementMaskPath(_ mask: MemoryBookElementMask, rect: CGRect, cornerRadius: CGFloat) -> UIBezierPath {
+        switch mask {
+        case .rectangle:
+            UIBezierPath(rect: rect)
+        case .roundedRectangle:
+            UIBezierPath(roundedRect: rect, cornerRadius: min(cornerRadius, min(rect.width, rect.height) / 2))
+        case .ellipse:
+            UIBezierPath(ovalIn: rect)
+        }
+    }
+
 }
 
 struct LocalVideoExporter: VideoExporting {

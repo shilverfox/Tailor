@@ -487,6 +487,59 @@ final class TailorOnboardingUITests: XCTestCase {
         attachScreenshot(named: "Tailor-editor-text-caption-saved")
     }
 
+    func testEditorTypographyPresetAndCustomAlignmentApplyAsOneUndoableChange() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let title = app.descendants(matching: .any)["Text element photoTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let original = marker(of: title)
+
+        app.buttons["Text"].tap()
+        app.buttons["Text field photoTitle"].tap()
+        XCTAssertTrue(app.textViews["Text draft input"].waitForExistence(timeout: 3))
+        let preset = app.buttons["Text preset Editorial title"]
+        for _ in 0..<5 where !preset.exists { app.swipeUp() }
+        XCTAssertTrue(preset.waitForExistence(timeout: 3))
+        preset.tap()
+        let center = app.buttons["Center"].firstMatch
+        XCTAssertTrue(center.waitForExistence(timeout: 3))
+        center.tap()
+        attachScreenshot(named: "Tailor-editor-typography-draft")
+        app.buttons["Text draft done"].tap()
+
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let applied = marker(of: title)
+        XCTAssertNotEqual(applied, original)
+        XCTAssertTrue(applied.contains("alignment=center"), "Custom alignment must persist in the shared text element: \(applied)")
+        XCTAssertFalse(applied.contains("tracking=0.000"), "Custom tracking must persist in the shared text element: \(applied)")
+        attachScreenshot(named: "Tailor-editor-typography-applied")
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: title), original, "Typography Done must be one atomic history transaction")
+    }
+
+    func testEditorWarnsAboutLowContrastAndOffersCoordinatedRepair() {
+        launch(demoRoute: "editor", demoState: "text-low-contrast")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        app.buttons["Text"].tap()
+        XCTAssertTrue(app.navigationBars["Edit text"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textViews["Text draft input"].waitForExistence(timeout: 3), "The page's primary title should open by default")
+
+        let warning = app.descendants(matching: .any)["Text contrast warning"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 3), "Unreadable custom text must be caught while editing")
+        let readability = app.descendants(matching: .any)["Text print readability"]
+        XCTAssertTrue(readability.exists)
+        XCTAssertTrue((readability.value as? String ?? "").contains("1.0 to 1 contrast"))
+        attachScreenshot(named: "Tailor-editor-text-contrast-warning")
+
+        let repair = app.buttons["Use readable text color"]
+        XCTAssertTrue(repair.isHittable)
+        repair.tap()
+        XCTAssertFalse(warning.waitForExistence(timeout: 1), "The recommended ink must resolve the warning immediately")
+        attachScreenshot(named: "Tailor-editor-text-contrast-repaired")
+    }
+
     func testEditorTextOverflowShowsAccessibleErrorAndFit() {
         launch(demoRoute: "editor", demoState: "text-fit-success")
         app.buttons["Page 5"].tap()
@@ -517,6 +570,92 @@ final class TailorOnboardingUITests: XCTestCase {
         let input = app.textViews["Text draft input"]
         XCTAssertTrue(input.waitForExistence(timeout: 3))
         XCTAssertEqual(input.value as? String, String(repeating: "n", count: 121), "Book Check must open the exact blocking text element, not only its page.")
+    }
+
+    func testBookCheckContrastRepairIsVisibleAndOneUndoRestoresTheDesign() {
+        launch(demoRoute: "editor", demoState: "text-low-contrast")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let title = app.descendants(matching: .any)["Text element photoTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let original = marker(of: title)
+
+        app.buttons["More editor actions"].tap()
+        XCTAssertTrue(app.buttons["Check book"].waitForExistence(timeout: 3))
+        app.buttons["Check book"].tap()
+        XCTAssertTrue(app.navigationBars["Book check"].waitForExistence(timeout: 3))
+        let fix = app.buttons["Book check fix Improve contrast photoTitle"]
+        XCTAssertTrue(fix.waitForExistence(timeout: 3) && fix.isHittable)
+        attachScreenshot(named: "Tailor-book-check-guided-contrast-fix")
+        fix.tap()
+        XCTAssertFalse(fix.waitForExistence(timeout: 1), "A successful repair must remove the now-resolved issue")
+        attachScreenshot(named: "Tailor-book-check-guided-contrast-resolved")
+        app.buttons["Done"].tap()
+
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let repaired = marker(of: title)
+        XCTAssertNotEqual(repaired, original)
+        XCTAssertTrue(repaired.contains("color=custom"))
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: title), original, "Book Check repair must be one atomic history transaction")
+    }
+
+    func testBookCheckAlignmentRepairSnapsExactlyAndOneUndoRestoresTheDesign() {
+        launch(demoRoute: "editor", demoState: "composition-near-align")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let title = app.descendants(matching: .any)["Text element photoTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let original = marker(of: title)
+        XCTAssertTrue(original.contains("x=0.092"))
+
+        app.buttons["More editor actions"].tap()
+        XCTAssertTrue(app.buttons["Check book"].waitForExistence(timeout: 3))
+        app.buttons["Check book"].tap()
+        let fix = app.buttons["Book check fix Align photoTitle"]
+        XCTAssertTrue(fix.waitForExistence(timeout: 3) && fix.isHittable)
+        attachScreenshot(named: "Tailor-book-check-guided-alignment-fix")
+        fix.tap()
+        XCTAssertFalse(fix.waitForExistence(timeout: 1))
+        app.buttons["Done"].tap()
+
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        let aligned = marker(of: title)
+        XCTAssertTrue(aligned.contains("x=0.080"), "Book Check should snap to the exact shared guide: \(aligned)")
+        XCTAssertNotEqual(aligned, original)
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: title), original, "Alignment repair must be one atomic history transaction")
+    }
+
+    func testChapterStyleScopePreservesLockedOpenerAndUndoesAtomically() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 4"].tap()
+        XCTAssertTrue(app.staticTexts["4 of 8"].waitForExistence(timeout: 3))
+        let paper = app.descendants(matching: .any)["Page paper"].firstMatch
+        XCTAssertTrue(paper.waitForExistence(timeout: 3))
+        let lockedOpenerPaper = paper.value as? String
+
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let originalPhotoPagePaper = paper.value as? String
+        app.buttons["Style"].tap()
+        XCTAssertTrue(app.navigationBars["Style"].waitForExistence(timeout: 3))
+        let apply = app.buttons["Apply chapter style cinema"]
+        for _ in 0..<5 where !apply.exists { app.swipeUp() }
+        XCTAssertTrue(apply.waitForExistence(timeout: 3) && apply.isHittable)
+        apply.tap()
+
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        XCTAssertNotEqual(paper.value as? String, originalPhotoPagePaper)
+        attachScreenshot(named: "Tailor-guided-style-chapter-photo-page")
+        app.buttons["Page 4"].tap()
+        XCTAssertTrue(app.staticTexts["4 of 8"].waitForExistence(timeout: 3))
+        XCTAssertEqual(paper.value as? String, lockedOpenerPaper, "Chapter styling must not overwrite its locked structural opener")
+
+        app.buttons["Editor undo"].tap()
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        XCTAssertEqual(paper.value as? String, originalPhotoPagePaper, "The whole chapter style action must undo as one transaction")
     }
 
     func testEditorTextFitSuccessUsesOneUndo() {
@@ -720,6 +859,318 @@ final class TailorOnboardingUITests: XCTestCase {
         attachScreenshot(named: "Tailor-editor-text-safe-drag-undo")
     }
 
+    func testEditorPrecisionCanvasZoomsAndFits() {
+        launch(demoRoute: "editor")
+        let fit = app.buttons["Fit canvas"]
+        let zoomIn = app.buttons["Zoom in canvas"]
+        let zoomOut = app.buttons["Zoom out canvas"]
+        XCTAssertTrue(fit.waitForExistence(timeout: 3))
+        XCTAssertEqual(fit.value as? String, "100 percent")
+        XCTAssertFalse(zoomOut.isEnabled)
+
+        zoomIn.tap()
+        XCTAssertEqual(fit.value as? String, "125 percent")
+        XCTAssertTrue(zoomOut.isEnabled)
+        attachScreenshot(named: "Tailor-editor-precision-canvas-125")
+
+        fit.tap()
+        XCTAssertEqual(fit.value as? String, "100 percent")
+        XCTAssertFalse(zoomOut.isEnabled)
+    }
+
+    func testEditorResizeHandleCommitsOneUndoableFrameChange() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photo = app.descendants(matching: .any)["Photo element"].firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 3))
+        photo.tap()
+
+        let handle = app.descendants(matching: .any)["Element resize handle"].firstMatch
+        XCTAssertTrue(handle.waitForExistence(timeout: 3))
+        let original = handle.frame
+        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.12, thenDragTo: start.withOffset(CGVector(dx: 28, dy: 28)))
+        let resized = handle.frame
+        XCTAssertNotEqual(resized, original, "The visible resize handle must write a real document-frame change")
+        attachScreenshot(named: "Tailor-editor-resize-handle")
+
+        XCTAssertTrue(app.buttons["Editor undo"].isEnabled)
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(handle.frame, original, "One Undo must restore the complete resize transaction")
+    }
+
+    func testEditorArrangeMenuLocksAlignsAndDuplicatesSelection() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photos = app.descendants(matching: .any).matching(identifier: "Photo element")
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 3))
+        let originalCount = photos.count
+        photos.firstMatch.tap()
+
+        let arrange = app.buttons["Arrange selected element"]
+        XCTAssertTrue(arrange.waitForExistence(timeout: 3))
+        arrange.tap()
+        app.buttons["Lock element"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Locked element indicator"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.descendants(matching: .any)["Element resize handle"].exists)
+
+        app.buttons["Arrange selected element"].tap()
+        app.buttons["Unlock element"].tap()
+        let handle = app.descendants(matching: .any)["Element resize handle"].firstMatch
+        XCTAssertTrue(handle.waitForExistence(timeout: 3))
+        let beforeAlign = handle.frame
+        app.buttons["Arrange selected element"].tap()
+        app.buttons["Align"].tap()
+        app.buttons["Align horizontal center"].tap()
+        XCTAssertNotEqual(handle.frame, beforeAlign)
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(handle.frame, beforeAlign)
+
+        app.buttons["Arrange selected element"].tap()
+        app.buttons["Duplicate element"].tap()
+        XCTAssertEqual(photos.count, originalCount + 1)
+        XCTAssertTrue(app.buttons["Editor undo"].isEnabled)
+        attachScreenshot(named: "Tailor-editor-arrange-duplicate")
+    }
+
+    func testEditorPhotoAppearanceAppliesAsOneUndoableDocumentChange() {
+        launch(demoRoute: "editor", demoState: "crop-landscape")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photo = app.descendants(matching: .any)["Photo element"].firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 3))
+        photo.tap()
+        let selectedTransform = app.descendants(matching: .any)["Selected photo transform"].firstMatch
+        XCTAssertTrue(selectedTransform.waitForExistence(timeout: 3))
+        let original = marker(of: selectedTransform)
+
+        app.buttons["Photo"].tap()
+        XCTAssertTrue(app.buttons["Photo appearance"].waitForExistence(timeout: 3))
+        app.buttons["Photo appearance"].tap()
+        XCTAssertTrue(app.navigationBars["Photo appearance"].waitForExistence(timeout: 3))
+        app.buttons["Oval"].tap()
+        app.buttons["Solid"].tap()
+        app.swipeUp()
+        let shadow = app.buttons["Toggle photo shadow"].firstMatch
+        XCTAssertTrue(shadow.waitForExistence(timeout: 3))
+        shadow.tap()
+        attachScreenshot(named: "Tailor-editor-photo-appearance-draft")
+        let preset = app.buttons["Photo preset Warm memory"].firstMatch
+        for _ in 0..<4 where !preset.exists { app.swipeUp() }
+        XCTAssertTrue(preset.waitForExistence(timeout: 3))
+        preset.tap()
+        app.buttons["Apply"].tap()
+
+        XCTAssertTrue(app.navigationBars["Photos"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+        XCTAssertTrue(selectedTransform.waitForExistence(timeout: 3))
+        let applied = marker(of: selectedTransform)
+        XCTAssertNotEqual(applied, original)
+        XCTAssertTrue(applied.contains("mask=ellipse") && applied.contains("border=solid") && applied.contains("shadow=0.24") && applied.contains("warmth=0.28"), "Applied appearance and finishing must be persisted in the shared element: \(applied)")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.78, dy: 0.57)).tap()
+        attachScreenshot(named: "Tailor-editor-photo-appearance-applied")
+
+        let appliedPhoto = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == %@ AND value == %@", "Photo element", applied)
+        ).firstMatch
+        XCTAssertTrue(appliedPhoto.waitForExistence(timeout: 3))
+        appliedPhoto.tap()
+        let reselectedTransform = app.descendants(matching: .any)["Selected photo transform"].firstMatch
+        XCTAssertTrue(reselectedTransform.waitForExistence(timeout: 3))
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: reselectedTransform), original, "Appearance Apply must be one atomic history transaction")
+    }
+
+    func testEditorPhotoGeometryAndAutoEnhanceApplyAsOneSharedChange() {
+        launch(demoRoute: "editor", demoState: "crop-landscape")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photo = app.descendants(matching: .any)["Photo element"].firstMatch
+        XCTAssertTrue(photo.waitForExistence(timeout: 3))
+        photo.tap()
+        let selectedTransform = app.descendants(matching: .any)["Selected photo transform"].firstMatch
+        XCTAssertTrue(selectedTransform.waitForExistence(timeout: 3))
+        let original = marker(of: selectedTransform)
+
+        app.buttons["Photo"].tap()
+        app.buttons["Photo appearance"].tap()
+        XCTAssertTrue(app.navigationBars["Photo appearance"].waitForExistence(timeout: 3))
+        for _ in 0..<3 where !app.buttons["Flip photo horizontal"].exists { app.swipeUp() }
+        app.buttons["Flip photo horizontal"].tap()
+        let straighten = app.descendants(matching: .any)["Adjustment slider Straighten"].firstMatch
+        XCTAssertTrue(straighten.waitForExistence(timeout: 3))
+        straighten.adjust(toNormalizedSliderPosition: 0.75)
+        for _ in 0..<3 where !app.buttons["Photo auto enhance"].exists { app.swipeUp() }
+        let autoEnhance = app.buttons["Photo auto enhance"]
+        XCTAssertTrue(autoEnhance.waitForExistence(timeout: 3))
+        autoEnhance.tap()
+        let enabled = NSPredicate(format: "isEnabled == true")
+        expectation(for: enabled, evaluatedWith: autoEnhance)
+        waitForExpectations(timeout: 5)
+        attachScreenshot(named: "Tailor-editor-photo-geometry-auto-draft")
+        app.buttons["Apply"].tap()
+        XCTAssertTrue(app.navigationBars["Photos"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+
+        XCTAssertTrue(selectedTransform.waitForExistence(timeout: 3))
+        let applied = marker(of: selectedTransform)
+        XCTAssertTrue(applied.contains("flipH=true"), "Horizontal flip must persist in the shared element: \(applied)")
+        XCTAssertFalse(applied.contains("straighten=0.0"), "Straighten must persist in the shared element: \(applied)")
+        XCTAssertFalse(applied.contains("ev=0.00"), "Auto Enhance must produce a visible but conservative adjustment: \(applied)")
+        attachScreenshot(named: "Tailor-editor-photo-geometry-auto-applied")
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: selectedTransform), original, "Geometry and Auto Enhance Apply must be one atomic history transaction")
+    }
+
+    func testEditorDecorationCanBeDesignedManagedAsALayerAndUndone() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let decorations = app.descendants(matching: .any).matching(identifier: "Decoration element")
+        XCTAssertEqual(decorations.count, 0)
+
+        app.buttons["More editor actions"].tap()
+        app.buttons["Add decoration"].tap()
+        XCTAssertTrue(app.navigationBars["Decoration appearance"].waitForExistence(timeout: 3))
+        app.buttons["Oval"].tap()
+        app.buttons["Solid"].tap()
+        app.swipeUp()
+        let shadow = app.buttons["Toggle decoration shadow"].firstMatch
+        XCTAssertTrue(shadow.waitForExistence(timeout: 3))
+        // Decorations start with a subtle default shadow. Exercise both states:
+        // remove it once, then add the stronger editable shadow back.
+        shadow.tap()
+        XCTAssertTrue(shadow.waitForExistence(timeout: 3))
+        shadow.tap()
+        attachScreenshot(named: "Tailor-editor-decoration-appearance-draft")
+        app.buttons["Apply"].tap()
+
+        let decoration = decorations.firstMatch
+        XCTAssertTrue(decoration.waitForExistence(timeout: 3))
+        let applied = marker(of: decoration)
+        XCTAssertTrue(applied.contains("mask=ellipse") && applied.contains("border=solid") && applied.contains("shadow=0.24"), "Decoration styling must persist in the shared element: \(applied)")
+        XCTAssertTrue(app.descendants(matching: .any)["Element resize handle"].waitForExistence(timeout: 3), "A decoration needs the same direct-manipulation resize affordance as a photo")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.57)).tap()
+        attachScreenshot(named: "Tailor-editor-decoration-applied")
+
+        app.buttons["More editor actions"].tap()
+        app.buttons["Layers"].tap()
+        XCTAssertTrue(app.navigationBars["Layers"].waitForExistence(timeout: 3))
+        let hideDecoration = app.buttons["Hide Decoration layer"].firstMatch
+        XCTAssertTrue(hideDecoration.waitForExistence(timeout: 3))
+        hideDecoration.tap()
+        app.buttons["Done"].tap()
+        XCTAssertEqual(decorations.count, 0)
+        app.buttons["Editor undo"].tap()
+        XCTAssertTrue(decorations.firstMatch.waitForExistence(timeout: 3), "One Undo must restore a decoration hidden from the Layers panel")
+    }
+
+    func testEditorPageBackgroundAppliesAsOneUndoableSharedChange() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let paper = app.descendants(matching: .any)["Page paper"].firstMatch
+        XCTAssertTrue(paper.waitForExistence(timeout: 3))
+        let original = marker(of: paper)
+
+        app.buttons["Style"].tap()
+        XCTAssertTrue(app.navigationBars["Style"].waitForExistence(timeout: 3))
+        app.buttons["Customize background"].tap()
+        XCTAssertTrue(app.navigationBars["Page background"].waitForExistence(timeout: 3))
+        app.buttons["Background preset Quiet sage"].tap()
+        attachScreenshot(named: "Tailor-editor-page-background-draft")
+        app.buttons["Apply"].tap()
+        XCTAssertTrue(app.navigationBars["Style"].waitForExistence(timeout: 3))
+        app.buttons["Done"].tap()
+
+        XCTAssertEqual(marker(of: paper), "red=0.820;green=0.870;blue=0.780")
+        XCTAssertNotEqual(marker(of: paper), original)
+        attachScreenshot(named: "Tailor-editor-page-background-applied")
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(marker(of: paper), original, "Background Apply must create exactly one Undo transaction")
+    }
+
+    func testEditorMultiSelectGroupsMovesAndUndoesAsOneTransaction() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photos = app.descendants(matching: .any).matching(identifier: "Photo element")
+        XCTAssertGreaterThanOrEqual(photos.count, 2)
+
+        app.buttons["Select multiple elements"].tap()
+        photos.element(boundBy: 0).tap()
+        photos.element(boundBy: 1).tap()
+        let bounds = app.descendants(matching: .any)["Multi-selection bounds"].firstMatch
+        XCTAssertTrue(bounds.waitForExistence(timeout: 3))
+        XCTAssertEqual(bounds.label, "2 selected elements")
+
+        app.buttons["Arrange 2 selected elements"].tap()
+        app.buttons["Group selected"].tap()
+        app.buttons["Arrange 2 selected elements"].tap()
+        XCTAssertTrue(app.buttons["Ungroup selected"].waitForExistence(timeout: 3), "Grouping must be reflected by the persisted selection model")
+        app.staticTexts["5 of 8"].tap()
+        app.buttons["Finish multiple selection"].tap()
+
+        let original = bounds.value as? String
+        let start = bounds.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.12, thenDragTo: start.withOffset(CGVector(dx: 20, dy: 18)))
+        XCTAssertNotEqual(bounds.value as? String, original)
+        XCTAssertTrue(app.buttons["Editor undo"].isEnabled)
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(bounds.value as? String, original, "One Undo must restore every member of the group move")
+        attachScreenshot(named: "Tailor-editor-multi-select-group")
+    }
+
+    func testEditorLayersPanelHidesAndUndoRestoresPhoto() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photos = app.descendants(matching: .any).matching(identifier: "Photo element")
+        let originalCount = photos.count
+        XCTAssertGreaterThan(originalCount, 0)
+
+        app.buttons["More editor actions"].tap()
+        app.buttons["Layers"].tap()
+        XCTAssertTrue(app.navigationBars["Layers"].waitForExistence(timeout: 3))
+        let hidePhoto = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hide Photo layer'")).firstMatch
+        XCTAssertTrue(hidePhoto.waitForExistence(timeout: 3))
+        hidePhoto.tap()
+        app.buttons["Done"].tap()
+        XCTAssertEqual(photos.count, originalCount - 1)
+
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(photos.count, originalCount)
+        attachScreenshot(named: "Tailor-editor-layers-visibility-undo")
+    }
+
+    func testEditorCopiesPhotoAcrossCompatiblePagesAndUndoesPaste() {
+        launch(demoRoute: "editor")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let source = app.descendants(matching: .any)["Photo element"].firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 3))
+        source.tap()
+        app.buttons["Arrange selected element"].tap()
+        app.buttons["Copy element"].tap()
+
+        let pageSeven = app.buttons["Page 7"]
+        XCTAssertTrue(pageSeven.waitForExistence(timeout: 3))
+        app.buttons["Page 6"].swipeLeft()
+        XCTAssertTrue(waitUntilHittable(pageSeven))
+        pageSeven.tap()
+        XCTAssertTrue(app.staticTexts["7 of 8"].waitForExistence(timeout: 3))
+        let targetPhotos = app.descendants(matching: .any).matching(identifier: "Photo element")
+        let originalCount = targetPhotos.count
+        app.buttons["More editor actions"].tap()
+        app.buttons["Paste copied elements"].tap()
+        XCTAssertEqual(targetPhotos.count, originalCount + 1)
+        app.buttons["Editor undo"].tap()
+        XCTAssertEqual(targetPhotos.count, originalCount)
+        attachScreenshot(named: "Tailor-editor-cross-page-copy")
+    }
+
     func testEditorTextBridgeRendersFixtureCaption() {
         launch(demoRoute: "editor", demoState: "text-safe-drag")
         let pageFive = app.buttons["Page 5"]
@@ -728,7 +1179,7 @@ final class TailorOnboardingUITests: XCTestCase {
         attachScreenshot(named: "Tailor-editor-text-bridge-after-page-five-tap")
         print(app.debugDescription)
         XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
-        let diagnostic = app.descendants(matching: .any)["Text renderer diagnostic"].firstMatch
+        let diagnostic = app.descendants(matching: .any)["Text renderer diagnostic photoCaption"].firstMatch
         XCTAssertTrue(diagnostic.waitForExistence(timeout: 3), "UIKit text bridge must expose a rendered diagnostic in UI-test mode")
         let value = diagnostic.value as? String ?? ""
         XCTAssertTrue(value.contains("snapshot=21") && value.contains("attributed=21"), "Expected non-empty B1 attributed caption: \(value)")
@@ -784,6 +1235,136 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Crop done primary"].waitForExistence(timeout: 3))
         app.buttons["Crop done primary"].tap()
         XCTAssertTrue(app.buttons["Photo"].waitForExistence(timeout: 3))
+    }
+
+    func testEditorInitialFocalCropUsesDetectedOffCentreSubject() {
+        launch(demoRoute: "editor", demoState: "crop-landscape-focal-right")
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 8"].waitForExistence(timeout: 3))
+        let photos = app.descendants(matching: .any).matching(identifier: "Photo element")
+        XCTAssertTrue(photos.firstMatch.waitForExistence(timeout: 3))
+        let candidates = (0..<photos.count).map { photos.element(boundBy: $0) }
+        let focalPhoto = candidates.first { marker(of: $0).contains("offsetX=-") }
+        XCTAssertNotNil(focalPhoto, "Exactly the asset with local subject geometry must receive an off-centre initial crop")
+        let value = marker(of: focalPhoto ?? photos.firstMatch)
+        let fields = Dictionary(uniqueKeysWithValues: value.split(separator: ";").compactMap { part -> (String, String)? in
+            let pieces = part.split(separator: "=", maxSplits: 1).map(String.init)
+            return pieces.count == 2 ? (pieces[0], pieces[1]) : nil
+        })
+        let offsetX = Double(fields["offsetX"] ?? "")
+        XCTAssertNotNil(offsetX, "The shared document marker must expose the persisted initial crop")
+        XCTAssertLessThan(offsetX ?? 0, -0.05, "A subject on the right must shift left toward the frame centre without user input")
+        XCTAssertEqual(fields["scale"], "1.000", "Aspect-fill excess should be used before inventing extra zoom")
+        focalPhoto?.tap()
+        attachScreenshot(named: "Tailor-editor-initial-focal-crop-right")
+    }
+
+    func testM7PhotorealisticPhotoKitEditorPreflight() throws {
+        if app.state != .notRunning { app.terminate() }
+        addUIInterruptionMonitor(withDescription: "Photos permission") { alert in
+            for label in ["Allow Full Access", "Allow Access to All Photos", "Allow", "允许完全访问", "允许访问所有照片", "允许"] where alert.buttons[label].exists {
+                alert.buttons[label].tap()
+                return true
+            }
+            return false
+        }
+        app.launchArguments = ["-uiRealPhotoQA", "-uiBypassPurchase"]
+        app.launch()
+        app.tap()
+        guard app.buttons["Page 5"].waitForExistence(timeout: 8) else {
+            let diagnostic = app.descendants(matching: .any)["M7 real photo diagnostic"]
+            let detail = diagnostic.waitForExistence(timeout: 1) ? diagnostic.label : "diagnostic-unavailable"
+            throw XCTSkip("The four local M7 PhotoKit assets are intentionally absent from a clean CI simulator (\(detail))")
+        }
+        app.buttons["Page 5"].tap()
+        XCTAssertTrue(app.staticTexts["5 of 6"].waitForExistence(timeout: 3))
+        let photoElements = app.descendants(matching: .any).matching(identifier: "Photo element")
+        XCTAssertEqual(photoElements.count, 4)
+        let diagnostic = app.descendants(matching: .any)["M7 real photo diagnostic"]
+        let transforms = (0..<photoElements.count).map { String(describing: photoElements.element(boundBy: $0).value ?? "nil") }.joined(separator: "\n")
+        let cropEvidence = XCTAttachment(string: "\(diagnostic.label)\n\(transforms)")
+        cropEvidence.name = "Tailor-M7-photorealistic-focal-diagnostic"
+        cropEvidence.lifetime = .keepAlways
+        add(cropEvidence)
+        attachScreenshot(named: "Tailor-M7-photorealistic-PhotoKit-editor")
+
+        let more = app.buttons["More editor actions"]
+        XCTAssertTrue(more.waitForExistence(timeout: 3))
+        more.tap()
+        let preview = app.buttons["Reading preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 3))
+        preview.tap()
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 5))
+        attachScreenshot(named: "Tailor-M7-photorealistic-PhotoKit-reader")
+
+        app.buttons["Edit book"].tap()
+        XCTAssertTrue(app.buttons["More editor actions"].waitForExistence(timeout: 3))
+        app.buttons["More editor actions"].tap()
+        XCTAssertTrue(app.buttons["Export PDF"].waitForExistence(timeout: 3))
+        app.buttons["Export PDF"].tap()
+        XCTAssertTrue(app.navigationBars["Book check"].waitForExistence(timeout: 5))
+        let cropBlocker = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "no subject focus is available")
+        ).firstMatch
+        XCTAssertTrue(
+            cropBlocker.waitForExistence(timeout: 3),
+            "A severe automatic crop without focal metadata must not reach PDF export until the user reviews it"
+        )
+        XCTAssertFalse(app.staticTexts["Ready when you are."].exists)
+        attachScreenshot(named: "Tailor-M7-photorealistic-severe-crop-blocked")
+
+        // Confirm each severe portrait crop through the production UI. This
+        // proves the quality gate is recoverable, persists user ownership, and
+        // allows the same real PhotoKit book to reach PDF only afterwards.
+        for reviewIndex in 1...2 {
+            let reviewCrop = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS %@", "confirm the framing before export")
+            ).firstMatch
+            XCTAssertTrue(reviewCrop.waitForExistence(timeout: 3))
+            reviewCrop.tap()
+            XCTAssertTrue(app.buttons["Photo"].waitForExistence(timeout: 3))
+            app.buttons["Photo"].tap()
+            if reviewIndex == 1 {
+                // Use the production precision controls for a deterministic,
+                // printable composition: 1.3x creates enough pan slack while
+                // retaining about 176 PPI, then three small downward nudges
+                // bring the high cat subject into the landscape frame.
+                let zoomIn = app.buttons["Photo crop zoom in"]
+                let nudgeDown = app.buttons["Photo crop nudge down"]
+                XCTAssertTrue(zoomIn.waitForExistence(timeout: 3))
+                XCTAssertTrue(nudgeDown.exists)
+                for _ in 0..<3 { zoomIn.tap() }
+                for _ in 0..<3 { nudgeDown.tap() }
+            }
+            XCTAssertTrue(app.buttons["Photo tool crop"].waitForExistence(timeout: 3))
+            app.buttons["Photo tool crop"].tap()
+            XCTAssertTrue(app.buttons["Crop done primary"].waitForExistence(timeout: 3))
+            if reviewIndex == 1 {
+                // The first blocker is the tall cat photo. Its centered fill
+                // places the face above the landscape aperture, so exercise a
+                // real corrective composition instead of merely acknowledging
+                // the warning and approving an unattractive crop.
+                let crop = app.descendants(matching: .any)["Crop canvas"].firstMatch
+                XCTAssertTrue(crop.waitForExistence(timeout: 3))
+                let reviewedComposition = marker(of: crop)
+                XCTAssertTrue(reviewedComposition.contains("scale=1.300"))
+                XCTAssertFalse(reviewedComposition.contains("offsetY=0.000"))
+            }
+            attachScreenshot(named: "Tailor-M7-photorealistic-crop-review-\(reviewIndex)")
+            app.buttons["Crop done primary"].tap()
+            XCTAssertTrue(app.buttons["More editor actions"].waitForExistence(timeout: 3))
+            app.buttons["More editor actions"].tap()
+            XCTAssertTrue(app.buttons["Export PDF"].waitForExistence(timeout: 3))
+            app.buttons["Export PDF"].tap()
+            if reviewIndex == 1 {
+                XCTAssertTrue(app.navigationBars["Book check"].waitForExistence(timeout: 5))
+            }
+        }
+
+        XCTAssertTrue(app.staticTexts["Ready when you are."].waitForExistence(timeout: 5))
+        app.buttons["Generate PDF"].tap()
+        XCTAssertTrue(app.staticTexts["Your archive is ready."].waitForExistence(timeout: 15))
+        attachScreenshot(named: "Tailor-M7-photorealistic-reviewed-PDF-complete")
     }
 
     func testEditorCropDraftExitOffersKeepSaveAndDiscard() {

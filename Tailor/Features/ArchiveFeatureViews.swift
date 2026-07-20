@@ -138,6 +138,7 @@ struct ScanFeatureView: View {
         VStack(spacing: 8) {
             Button {
                 if needsReferencePhotos { back() }
+                else if displayState == "lowBattery" { pause() }
                 else if isScanning { pause() }
                 else if progress >= 1 { next() }
                 else { start() }
@@ -148,13 +149,14 @@ struct ScanFeatureView: View {
             if isFailed {
                 Button("Review matches so far") { next() }.font(.footnote.weight(.bold)).foregroundStyle(TailorColor.paper)
             } else if isResourceConstrained {
-                Button("Save and go back", action: back).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.paper)
+                Button(displayState == "lowBattery" ? "Continue later" : "Save and go back", action: back).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.paper)
             }
         }.padding(.horizontal, 24).padding(.vertical, 12).background(TailorColor.ink)
     } }
 
     private var primaryActionTitle: String {
         if needsReferencePhotos { return "Choose reference photos" }
+        if displayState == "lowBattery" { return "Pause now" }
         if isResourceConstrained { return "Resume scan" }
         if isFailed { return "Try again" }
         if isScanning { return "Pause scan" }

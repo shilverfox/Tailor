@@ -123,7 +123,7 @@ Normal launches always use the production service container.
 
 The project builds successfully for the iOS Simulator and a physical iPhone 13. The test suite covers routing, persistence, recognition policies, scan resume/merge behavior, purchase failure safety, page construction, editor operations, shared rendering, Unicode text, crop geometry, PDF evidence, and the end-to-end archive flow.
 
-The current local Alpha still has open regression work around legacy element decoding and a small set of replacement/rotated-crop geometry assertions. Real-library recognition calibration, StoreKit release evidence, and full Editor/Reader/PDF pixel sign-off remain release gates. This repository should not be interpreted as an App Store release candidate.
+The current local verification run passes 78 model/service tests and 44 end-to-end UI tests. Real-library recognition calibration, StoreKit release evidence, privacy-manifest and signed-archive validation, accessibility evidence, and approved Editor/Reader/PDF pixel baselines remain release gates. This repository should not be interpreted as an App Store release candidate; see `docs/release-readiness-audit-2026-07-19.md` for the current gate-by-gate verdict.
 
 ## Repository map
 

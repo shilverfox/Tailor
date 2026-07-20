@@ -14,6 +14,31 @@ enum PhotoAssetAvailability {
     }
 }
 
+enum PhotoAssetImageLoader {
+    static func image(identifier: String, targetSize: CGSize = CGSize(width: 1_200, height: 1_200)) async -> UIImage? {
+        if let fixture = MemoryBookVisualQAAsset.image(identifier: identifier) { return fixture }
+        return await Task.detached(priority: .userInitiated) {
+            let result = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+            guard let asset = result.firstObject else { return nil }
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .highQualityFormat
+            options.resizeMode = .exact
+            options.isNetworkAccessAllowed = true
+            options.isSynchronous = true
+            var output: UIImage?
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: targetSize,
+                contentMode: .aspectFit,
+                options: options
+            ) { image, _ in
+                output = image
+            }
+            return output
+        }.value
+    }
+}
+
 /// Invalidates active editor and reader pages when Photos permission or assets
 /// change. The predicate above remains the sole availability decision.
 @MainActor
@@ -152,6 +177,7 @@ struct PhotoAssetThumbnail: View {
     let identifier: String
     var contentMode: ContentMode = .fill
     var treatment: MemoryBookImageTreatment = .original
+    var adjustments: MemoryBookImageAdjustments = .default
     var background: Color = TailorColor.mist
     @State private var image: UIImage?
     @State private var requestID: PHImageRequestID = PHInvalidImageRequestID
@@ -166,7 +192,7 @@ struct PhotoAssetThumbnail: View {
             }
         }
         .clipped()
-        .task(id: identifier) { requestImage() }
+        .task(id: renderKey) { requestImage() }
         .onDisappear {
             guard requestID != PHInvalidImageRequestID else { return }
             PHImageManager.default().cancelImageRequest(requestID)
@@ -182,7 +208,7 @@ struct PhotoAssetThumbnail: View {
         // markers, so visual evidence can prove crop/rotation behavior rather
         // than showing the generic missing-photo placeholder.
         guard let asset = fetched.firstObject else {
-            if let fixture = localCropFixture(identifier: identifier) { image = fixture }
+            if let fixture = localCropFixture(identifier: identifier) { image = MemoryBookImageProcessor.process(fixture, treatment: treatment, adjustments: adjustments) }
             return
         }
         let options = PHImageRequestOptions()
@@ -200,19 +226,14 @@ struct PhotoAssetThumbnail: View {
             options: options
         ) { result, _ in
             guard let result else { return }
-            let rendered = apply(treatment, to: result)
+            let rendered = MemoryBookImageProcessor.process(result, treatment: treatment, adjustments: adjustments)
             Task { @MainActor in image = rendered }
         }
     }
 
-    private func apply(_ treatment: MemoryBookImageTreatment, to image: UIImage) -> UIImage {
-        guard treatment == .mono, let cgImage = image.cgImage else { return image }
-        let input = CIImage(cgImage: cgImage)
-        guard let filter = CIFilter(name: "CIPhotoEffectMono") else { return image }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        guard let output = filter.outputImage,
-              let rendered = CIContext().createCGImage(output, from: output.extent) else { return image }
-        return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
+    private var renderKey: String {
+        let a = adjustments
+        return "\(identifier)|\(treatment)|\(a.exposure)|\(a.brightness)|\(a.contrast)|\(a.saturation)|\(a.warmth)|\(a.highlights)|\(a.shadows)|\(a.vignette)|\(a.sharpness)"
     }
 
     private func localCropFixture(identifier: String) -> UIImage? {
@@ -236,6 +257,10 @@ struct MemoryBookImageTransform<Source: View>: View {
             .offset(
                 x: geometry.transform.offset.width * geometry.container.width,
                 y: geometry.transform.offset.height * geometry.container.height
+            )
+            .scaleEffect(
+                x: geometry.flipHorizontal ? -1 : 1,
+                y: geometry.flipVertical ? -1 : 1
             )
             .rotationEffect(.degrees(geometry.rotationDegrees))
             .frame(width: geometry.container.width, height: geometry.container.height)

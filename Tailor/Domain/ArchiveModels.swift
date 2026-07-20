@@ -45,7 +45,20 @@ enum MemoryBookVisualQAFixture {
         // Each rendered placement uses its own source asset.  This deliberately
         // exercises seven distinct crops without turning the visual fixture
         // into a duplicate-photo validation failure.
-        let photos = (1...7).map { i in ArchivePhoto(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 200 + i))!, assetLocalIdentifier: "fixture-photo-\(i)", decision: .selected, confidence: 1, createdAt: Date(timeIntervalSince1970: 1_704_067_200 + TimeInterval(i * 86_400))) }
+        let photos = (1...7).map { i in
+            ArchivePhoto(
+                id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 200 + i))!,
+                assetLocalIdentifier: "fixture-photo-\(i)",
+                decision: .selected,
+                confidence: 1,
+                createdAt: Date(timeIntervalSince1970: 1_704_067_200 + TimeInterval(i * 86_400)),
+                // The deterministic bitmap generator draws its explicit
+                // subject marker in this centre region. Supplying that known
+                // fixture metadata keeps rendering tests focused on output
+                // equality instead of intentionally triggering crop review.
+                subjectRegion: CGRect(x: 0.38, y: 0.38, width: 0.24, height: 0.24)
+            )
+        }
         func page(_ n: Int, _ kind: MemoryBookPageKind, _ title: String, _ subtitle: String = "", _ ids: [UUID] = [], _ layout: MemoryBookLayout = .note) -> MemoryBookPage { MemoryBookPage(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 500 + n))!, kind: kind, title: title, subtitle: subtitle, photoIDs: ids, layout: layout, pageNumber: n, elements: MemoryBookBuilder.elements(kind: kind, title: title, subtitle: subtitle, photos: ids, layout: layout)) }
         var pages = [page(1,.cover,"Milo","A life in moments",[photos[4].id],.single),page(2,.dedication,"For Milo","For every ordinary morning, every walk, and every place that still feels like home."),page(3,.contents,"Contents","Early days · 4\nDays together · 5\nKept close · 7"),page(4,.chapterOpener,"Days together","2019–2021",[photos[5].id],.single),page(5,.photoSelection,"Small adventures","A few of the days we kept.",Array(photos.prefix(4).map(\.id)),.grid2x2),page(6,.milestone,"2017","The first year we saved together.",[photos[6].id],.single),page(7,.closing,"Kept with care.","Tailor never changes your original photos.")]
         // The production builder's subtitle slot is intentionally compact for
@@ -94,9 +107,20 @@ enum MemoryBookVisualQAAsset {
             UIColor(red: 0.82, green: 0.88, blue: 0.76, alpha: 1).setFill(); cg.fill(rect)
             UIColor(red: 0.12, green: 0.29, blue: 0.24, alpha: 1).setFill(); cg.fill(CGRect(x: 0, y: 0, width: size.width * 0.28, height: size.height * 0.22))
             UIColor(red: 0.78, green: 0.31, blue: 0.17, alpha: 1).setFill(); cg.fill(CGRect(x: size.width * 0.72, y: size.height * 0.78, width: size.width * 0.28, height: size.height * 0.22))
-            UIColor.white.withAlphaComponent(0.92).setFill(); cg.fillEllipse(in: CGRect(x: size.width * 0.38, y: size.height * 0.38, width: size.width * 0.24, height: size.height * 0.24))
-            UIColor(red: 0.12, green: 0.29, blue: 0.24, alpha: 1).setFill(); cg.fillEllipse(in: CGRect(x: size.width * 0.455, y: size.height * 0.455, width: size.width * 0.09, height: size.width * 0.09))
-            let label = identifier.hasPrefix("fixture-photo-") ? "F\(identifier.suffix(1)) · CENTER" : (identifier.contains("minus15") ? "-15°  •  CENTER" : (identifier.contains("plus15") ? "+15°  •  CENTER" : "0°  •  CENTER"))
+            #if DEBUG
+            // Only the first source owns focal metadata. The neighbouring
+            // centred sources make the resulting crop visually auditable.
+            let focalRight = identifier.contains("photo-0-crop-landscape-focal-right")
+            #else
+            let focalRight = false
+            #endif
+            let subjectRect = focalRight
+                ? CGRect(x: size.width * 0.72, y: size.height * 0.30, width: size.width * 0.20, height: size.height * 0.34)
+                : CGRect(x: size.width * 0.38, y: size.height * 0.38, width: size.width * 0.24, height: size.height * 0.24)
+            UIColor.white.withAlphaComponent(0.92).setFill(); cg.fillEllipse(in: subjectRect)
+            UIColor(red: 0.12, green: 0.29, blue: 0.24, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: subjectRect.midX - size.width * 0.045, y: subjectRect.midY - size.width * 0.045, width: size.width * 0.09, height: size.width * 0.09))
+            let label = focalRight ? "AUTO FOCUS →" : (identifier.hasPrefix("fixture-photo-") ? "F\(identifier.suffix(1)) · CENTER" : (identifier.contains("minus15") ? "-15°  •  CENTER" : (identifier.contains("plus15") ? "+15°  •  CENTER" : "0°  •  CENTER")))
             let attributes: [NSAttributedString.Key: Any] = [.font: UIFont.monospacedSystemFont(ofSize: min(size.width, size.height) * 0.038, weight: .bold), .foregroundColor: UIColor(red: 0.12, green: 0.29, blue: 0.24, alpha: 1)]
             let textSize = (label as NSString).size(withAttributes: attributes)
             label.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2), withAttributes: attributes)
@@ -111,6 +135,22 @@ struct MemoryBookRGB: Codable, Equatable, Sendable {
     let red: Double
     let green: Double
     let blue: Double
+
+    /// WCAG's sRGB relative luminance is useful beyond screens: it gives the
+    /// editor a deterministic, renderer-independent way to catch text that
+    /// will disappear into a custom paper colour before a book is exported.
+    var relativeLuminance: Double {
+        func linear(_ component: Double) -> Double {
+            let value = min(1, max(0, component))
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
+    func contrastRatio(with other: MemoryBookRGB) -> Double {
+        let values = [relativeLuminance, other.relativeLuminance].sorted()
+        return (values[1] + 0.05) / (values[0] + 0.05)
+    }
 }
 
 enum MemoryBookImageTreatment: Codable, Equatable, Sendable { case original, mono }
@@ -175,6 +215,7 @@ struct MemoryBookTextLayoutSpec: Codable, Equatable, Sendable {
     let fontSize: CGFloat
     let lineHeight: CGFloat
     let kern: CGFloat
+    let paragraphSpacing: CGFloat
     let alignment: MemoryBookTextAlignment
     let writingDirection: MemoryBookTextWritingDirection
     let textRect: CGRect
@@ -194,6 +235,7 @@ struct MemoryBookTextLayoutSpec: Codable, Equatable, Sendable {
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.minimumLineHeight = lineHeight
         paragraph.maximumLineHeight = lineHeight
+        paragraph.paragraphSpacing = paragraphSpacing
         return paragraph
     }
 
@@ -255,6 +297,37 @@ enum MemoryBookTextAlignment: String, Codable, Equatable, Sendable {
     }
 }
 
+/// Exact, non-destructive typography controls persisted with each text layer.
+/// Values are relative to the resolved font size so they remain visually
+/// identical from the phone canvas to A4/Letter PDF output.
+struct MemoryBookTextTypographyAdjustments: Codable, Equatable, Sendable {
+    var alignment: MemoryBookTextAlignment
+    var trackingEm: CGFloat
+    var lineHeightMultiple: CGFloat
+    var paragraphSpacingEm: CGFloat
+
+    init(
+        alignment: MemoryBookTextAlignment = .leading,
+        trackingEm: CGFloat = 0,
+        lineHeightMultiple: CGFloat = 1.22,
+        paragraphSpacingEm: CGFloat = 0
+    ) {
+        self.alignment = alignment
+        self.trackingEm = trackingEm
+        self.lineHeightMultiple = lineHeightMultiple
+        self.paragraphSpacingEm = paragraphSpacingEm
+        normalize()
+    }
+
+    mutating func normalize() {
+        trackingEm = min(0.20, max(-0.05, trackingEm))
+        lineHeightMultiple = min(2, max(0.90, lineHeightMultiple))
+        paragraphSpacingEm = min(1.5, max(0, paragraphSpacingEm))
+    }
+
+    static let `default` = MemoryBookTextTypographyAdjustments()
+}
+
 enum MemoryBookTextWritingDirection: String, Codable, Equatable, Sendable {
     case natural, leftToRight, rightToLeft
 
@@ -288,17 +361,21 @@ struct MemoryBookTextLineBox: Codable, Equatable, Sendable {
 struct MemoryBookTextMeasurement: Codable, Equatable, Sendable {
     let requiredLines: Int
     let availableLines: Int
+    let requiredHeight: CGFloat
+    let availableHeight: CGFloat
     let occupiedRect: CGRect
     let lineBoxes: [MemoryBookTextLineBox]
 
-    init(requiredLines: Int, availableLines: Int, occupiedRect: CGRect = .zero, lineBoxes: [MemoryBookTextLineBox] = []) {
+    init(requiredLines: Int, availableLines: Int, requiredHeight: CGFloat, availableHeight: CGFloat, occupiedRect: CGRect = .zero, lineBoxes: [MemoryBookTextLineBox] = []) {
         self.requiredLines = requiredLines
         self.availableLines = availableLines
+        self.requiredHeight = requiredHeight
+        self.availableHeight = availableHeight
         self.occupiedRect = occupiedRect
         self.lineBoxes = lineBoxes
     }
 
-    var overflows: Bool { requiredLines > availableLines }
+    var overflows: Bool { requiredHeight > availableHeight + 0.25 }
 }
 
 /// Validation is deliberately evaluated from the in-memory editing draft. It
@@ -309,6 +386,27 @@ struct MemoryBookTextDraftValidation: Equatable, Sendable {
     let measurement: MemoryBookTextMeasurement
     var exceedsCharacterLimit: Bool { characterCount > characterLimit }
     var isValid: Bool { !exceedsCharacterLimit && !measurement.overflows }
+}
+
+/// A print-focused quality signal computed from the exact text layout and
+/// colours used by Editor, Reader and PDF. Low contrast remains a suggestion
+/// so deliberate artistic choices stay possible; the 11pt renderer floor is a
+/// hard invariant and is reported here for auditability.
+struct MemoryBookTextReadabilityAssessment: Equatable, Sendable {
+    static let minimumPrintPointSize: CGFloat = 11
+    /// Print paper, texture and antialiasing differ from an emissive screen.
+    /// 4.0:1 catches genuinely disappearing custom colours while keeping the
+    /// authored 4.2–4.4:1 secondary inks in Tailor's default styles quiet.
+    static let minimumContrastRatio = 4.0
+
+    let fontSize: CGFloat
+    let contrastRatio: Double
+    let foreground: MemoryBookRGB
+    let background: MemoryBookRGB
+    let recommendedForeground: MemoryBookRGB
+
+    var isPrintSizeReadable: Bool { fontSize + 0.01 >= Self.minimumPrintPointSize }
+    var hasSufficientContrast: Bool { contrastRatio + 0.01 >= Self.minimumContrastRatio }
 }
 
 struct MemoryBookTextLayoutSnapshot: Codable, Equatable, Sendable {
@@ -437,6 +535,10 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
     let paperRect: CGRect
     let safeRect: CGRect
     let style: MemoryBookPageStyle
+    /// The page's actual printable base color. A page override belongs to the
+    /// document contract, while the resolved style continues to supply ink,
+    /// texture and other coordinated tokens.
+    let paperColor: MemoryBookRGB
     let pageID: UUID?
     let orderedElements: [MemoryBookElement]
     let watermark: MemoryBookWatermarkStyle?
@@ -450,6 +552,7 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
         paperRect = pageRect.insetBy(dx: pageSize.width * Self.paperInsetRatio, dy: pageSize.width * Self.paperInsetRatio)
         safeRect = paperRect.insetBy(dx: paperRect.width * Self.safeInsetRatio, dy: paperRect.height * Self.safeInsetRatio)
         self.style = style
+        paperColor = style.paper
         pageID = nil
         orderedElements = []
         watermark = watermarked ? .preview : nil
@@ -467,11 +570,12 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
         safeRect = paperRect.insetBy(dx: paperRect.width * Self.safeInsetRatio, dy: paperRect.height * Self.safeInsetRatio)
         let resolvedStyle = MemoryBookPageStyle.resolve(page.styleOverride ?? document.style)
         style = resolvedStyle
+        paperColor = page.backgroundColor ?? resolvedStyle.paper
         pageID = page.id
         let elements = page.elements.isEmpty
             ? MemoryBookBuilder.elements(kind: page.kind, title: page.title, subtitle: page.subtitle, photos: page.photoIDs, layout: page.layout)
             : page.elements
-        let ordered = elements.sorted {
+        let ordered = elements.filter { !$0.isHidden }.sorted {
             $0.zIndex == $1.zIndex ? $0.id.uuidString < $1.id.uuidString : $0.zIndex < $1.zIndex
         }
         orderedElements = ordered
@@ -662,9 +766,10 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
             fontPostScriptName: resolvedFont.fontName,
             fallbackPostScriptName: fallbackPostScript,
             fontSize: fontSize,
-            lineHeight: max(resolvedFont.lineHeight, fontSize * 1.22),
-            kern: 0,
-            alignment: .leading,
+            lineHeight: max(resolvedFont.lineHeight, fontSize * element.textTypographyAdjustments.lineHeightMultiple),
+            kern: fontSize * element.textTypographyAdjustments.trackingEm,
+            paragraphSpacing: fontSize * element.textTypographyAdjustments.paragraphSpacingEm,
+            alignment: element.textTypographyAdjustments.alignment,
             writingDirection: .inferred(from: element.text ?? ""),
             textRect: textRect,
             editableRect: editableRect,
@@ -707,9 +812,29 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
         }
         let requiredLines = max(1, lineBoxes.count)
         let availableLines = max(1, Int(floor(spec.textRect.height / spec.lineHeight)))
+        let bounds = attributed.boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        // Core Text already gives the exact wrapped line count. Add authored
+        // paragraph gaps deterministically instead of using boundingRect's
+        // platform-dependent font-leading padding, which can falsely reject a
+        // text block that fits on the final line by a fraction of a point.
+        let paragraphBreaks = text.reduce(into: 0) { count, character in
+            if character == "\n" { count += 1 }
+        }
         let occupiedHeight = CGFloat(requiredLines) * spec.lineHeight
-        let occupied = CGRect(x: spec.textRect.minX, y: spec.textRect.minY, width: min(width, attributed.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).width), height: occupiedHeight)
-        return MemoryBookTextMeasurement(requiredLines: requiredLines, availableLines: availableLines, occupiedRect: occupied, lineBoxes: lineBoxes)
+            + CGFloat(paragraphBreaks) * spec.paragraphSpacing
+        let occupied = CGRect(x: spec.textRect.minX, y: spec.textRect.minY, width: min(width, bounds.width), height: occupiedHeight)
+        return MemoryBookTextMeasurement(
+            requiredLines: requiredLines,
+            availableLines: availableLines,
+            requiredHeight: occupiedHeight,
+            availableHeight: spec.textRect.height,
+            occupiedRect: occupied,
+            lineBoxes: lineBoxes
+        )
     }
 }
 
@@ -767,6 +892,10 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
     /// Scanner evidence stays on this device so confirmed decisions can later
     /// be evaluated against the exact policy that proposed the photo.
     var recognitionEvidence: PetRecognitionEvidence?
+    /// Normalized top-left image coordinates for the locally detected target
+    /// animal. This is geometry only, never a copied image or uploaded signal;
+    /// automatic layouts use it to avoid centring a crop on empty background.
+    var subjectRegion: CGRect?
     /// A local grouping key for near-identical burst/re-import candidates. It
     /// never changes the user's inclusion/exclusion decision.
     var visualDuplicateGroupID: String?
@@ -794,6 +923,7 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         pixelSize: CGSize? = nil,
         visualHash: UInt64? = nil,
         recognitionEvidence: PetRecognitionEvidence? = nil,
+        subjectRegion: CGRect? = nil,
         visualDuplicateGroupID: String? = nil
     ) {
         self.id = id
@@ -807,12 +937,13 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         self.pixelSize = pixelSize
         self.visualHash = visualHash
         self.recognitionEvidence = recognitionEvidence
+        self.subjectRegion = subjectRegion.map(FocalCropPolicy.normalizedSubjectRegion)
         self.visualDuplicateGroupID = visualDuplicateGroupID
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, assetLocalIdentifier, decision, confidence, createdAt
-        case sensitivityState, excludedReason, localDateRange, pixelSize, visualHash, recognitionEvidence, visualDuplicateGroupID
+        case sensitivityState, excludedReason, localDateRange, pixelSize, visualHash, recognitionEvidence, subjectRegion, visualDuplicateGroupID
     }
 
     init(from decoder: Decoder) throws {
@@ -829,7 +960,79 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         pixelSize = try values.decodeIfPresent(CGSize.self, forKey: .pixelSize)
         visualHash = try values.decodeIfPresent(UInt64.self, forKey: .visualHash)
         recognitionEvidence = try values.decodeIfPresent(PetRecognitionEvidence.self, forKey: .recognitionEvidence)
+        subjectRegion = try values.decodeIfPresent(CGRect.self, forKey: .subjectRegion).map(FocalCropPolicy.normalizedSubjectRegion)
         visualDuplicateGroupID = try values.decodeIfPresent(String.self, forKey: .visualDuplicateGroupID)
+    }
+}
+
+/// Pure, local focal geometry. Vision uses a bottom-left origin while Tailor's
+/// page/source coordinate system uses a top-left origin.
+enum FocalCropPolicy {
+    static func normalizedSubjectRegion(_ region: CGRect) -> CGRect {
+        let x = min(1, max(0, region.minX))
+        let y = min(1, max(0, region.minY))
+        let maxX = min(1, max(x, region.maxX))
+        let maxY = min(1, max(y, region.maxY))
+        return CGRect(x: x, y: y, width: maxX - x, height: maxY - y)
+    }
+
+    static func topLeftRegion(fromVisionBoundingBox box: CGRect) -> CGRect {
+        normalizedSubjectRegion(CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height))
+    }
+
+    static func recommendedOffset(subjectRegion: CGRect, sourceAspect: CGFloat, containerAspect: CGFloat) -> CGSize {
+        let region = normalizedSubjectRegion(subjectRegion)
+        guard region.width > 0, region.height > 0 else { return .zero }
+        return FillCropConstraint(sourceAspect: sourceAspect, containerAspect: containerAspect)
+            .offsetCenteringSourcePoint(CGPoint(x: region.midX, y: region.midY))
+    }
+}
+
+enum MemoryBookPrintQuality {
+    static let preferredPPI: CGFloat = 300
+    static let minimumPPI: CGFloat = 150
+
+    static func drawnSizeInPoints(
+        container: CGRect,
+        photo: ArchivePhoto,
+        element: MemoryBookElement
+    ) -> CGSize {
+        let sourceAspect = max(0.01, photo.aspectRatio)
+        let baseHeight: CGFloat = switch element.imageContentMode {
+        case .fill: max(container.height, container.width / sourceAspect)
+        case .fit: min(container.height, container.width / sourceAspect)
+        }
+        let geometry = MemoryBookImageTransformGeometry(container: container, sourceAspect: sourceAspect, element: element)
+        return CGSize(
+            width: sourceAspect * baseHeight * geometry.transform.scale,
+            height: baseHeight * geometry.transform.scale
+        )
+    }
+
+    static func effectivePPI(
+        container: CGRect,
+        photo: ArchivePhoto,
+        element: MemoryBookElement
+    ) -> CGFloat? {
+        guard let pixels = photo.pixelSize, pixels.width > 0, pixels.height > 0 else { return nil }
+        let drawn = drawnSizeInPoints(container: container, photo: photo, element: element)
+        return min(
+            pixels.width / max(1, drawn.width) * 72,
+            pixels.height / max(1, drawn.height) * 72
+        )
+    }
+}
+
+enum MemoryBookCropQuality {
+    /// Below this threshold an automatic aspect-fill discards enough of the
+    /// source that a centred fallback can easily remove a face or pet. The
+    /// user may keep the crop, but must explicitly review it first.
+    static let minimumUnreviewedVisibleFraction: CGFloat = 0.65
+
+    static func visibleSourceFraction(sourceAspect: CGFloat, containerAspect: CGFloat) -> CGFloat {
+        let source = max(0.01, sourceAspect)
+        let container = max(0.01, containerAspect)
+        return min(source, container) / max(source, container)
     }
 }
 
@@ -897,10 +1100,6 @@ struct FillCropConstraint: Equatable, Sendable {
 
     func normalized(scale: CGFloat, offset: CGSize) -> (scale: CGFloat, offset: CGSize) {
         let validScale = min(Self.maximumScale, max(minimumScale, scale))
-        // At the exact fill boundary the centered image is the only legal
-        // transform. Returning it explicitly avoids a floating-point sliver
-        // of offset that could reveal a line of paper at high export DPI.
-        if validScale <= minimumScale + 0.000001 { return (validScale, .zero) }
         let proposed = offset
         // A valid candidate is already the user's intended crop.  Only project
         // a candidate that would expose the page background back to the last
@@ -917,6 +1116,24 @@ struct FillCropConstraint: Equatable, Sendable {
             if containsBlankEdge(scale: validScale, offset: candidate) { high = mid } else { low = mid }
         }
         return (validScale, CGSize(width: proposed.width * low, height: proposed.height * low))
+    }
+
+    /// Translate the detected source point toward the frame centre, then use
+    /// the same projection as direct manipulation to guarantee no blank edge.
+    func offsetCenteringSourcePoint(_ point: CGPoint) -> CGSize {
+        let sourcePoint = CGPoint(x: min(1, max(0, point.x)), y: min(1, max(0, point.y)))
+        let size = baseDrawnSize
+        let proposed = CGSize(
+            width: -(sourcePoint.x - 0.5) * size.width / containerAspect,
+            height: -(sourcePoint.y - 0.5) * size.height
+        )
+        // A fill crop often has spare room on only one axis. Projecting the
+        // diagonal vector as a whole would collapse both components to zero
+        // when the no-slack axis asks for even a tiny move. Preserve all legal
+        // movement by clamping each axis first, then validate the combination.
+        let horizontal = normalized(scale: 1, offset: CGSize(width: proposed.width, height: 0)).offset.width
+        let vertical = normalized(scale: 1, offset: CGSize(width: 0, height: proposed.height)).offset.height
+        return normalized(scale: 1, offset: CGSize(width: horizontal, height: vertical)).offset
     }
 
     func containsBlankEdge(scale: CGFloat, offset: CGSize) -> Bool {
@@ -955,12 +1172,16 @@ struct MemoryBookImageTransformGeometry: Equatable, Sendable {
     let sourceAspect: CGFloat
     let transform: CropTransform
     let rotationDegrees: Double
+    let flipHorizontal: Bool
+    let flipVertical: Bool
     let contentMode: MemoryBookImageContentMode
 
     init(container: CGRect, sourceAspect: CGFloat, element: MemoryBookElement) {
         self.container = container
         self.sourceAspect = max(0.01, sourceAspect)
-        rotationDegrees = element.rotationDegrees
+        rotationDegrees = element.rotationDegrees + element.imageTransformAdjustments.straightenDegrees
+        flipHorizontal = element.imageTransformAdjustments.flipHorizontal
+        flipVertical = element.imageTransformAdjustments.flipVertical
         contentMode = element.imageContentMode
         // Fit is a placement mode, not a crop mode.  Never carry an old
         // aspect-fill crop transform into it: that would silently enlarge and
@@ -972,7 +1193,7 @@ struct MemoryBookImageTransformGeometry: Equatable, Sendable {
         let constraint = FillCropConstraint(
             sourceAspect: sourceAspect,
             containerAspect: container.width / max(0.01, container.height),
-            rotationDegrees: element.rotationDegrees
+            rotationDegrees: rotationDegrees
         )
         let normalized = constraint.normalized(scale: element.cropScale, offset: element.cropOffset)
         transform = CropTransform(scale: normalized.scale, offset: normalized.offset)
@@ -1214,9 +1435,76 @@ enum MemoryBookLayout: String, Codable, CaseIterable, Sendable {
     var canonical: MemoryBookLayout { self == .mosaic ? .grid3x2 : self }
 }
 
-enum MemoryBookElementKind: String, Codable, Sendable { case image, text }
+enum MemoryBookElementKind: String, Codable, Sendable { case image, text, shape }
 enum MemoryBookElementOrigin: String, Codable, Sendable { case automatic, user }
 enum MemoryBookTextStyle: String, Codable, Sendable, CaseIterable { case small, standard, large }
+
+struct MemoryBookEditorSnapGuides: Equatable, Sendable {
+    var vertical: CGFloat?
+    var horizontal: CGFloat?
+
+    static let none = MemoryBookEditorSnapGuides(vertical: nil, horizontal: nil)
+}
+
+struct MemoryBookEditorSnapResult: Equatable, Sendable {
+    let frame: CGRect
+    let guides: MemoryBookEditorSnapGuides
+}
+
+/// Pure normalized alignment policy for the page editor. Matching equivalent
+/// anchors (left-to-left, centre-to-centre, right-to-right) avoids surprising
+/// jumps such as snapping an element edge to a neighbour's centre. The UI
+/// supplies a zoom-aware normalized threshold and renders the returned guides.
+enum MemoryBookEditorSnapEngine {
+    static func snap(
+        frame: CGRect,
+        peerFrames: [CGRect],
+        safeInset: CGFloat = MemoryBookPageRenderPlan.safeInsetRatio,
+        threshold: CGFloat
+    ) -> MemoryBookEditorSnapResult {
+        var result = frame
+
+        var xCandidates: [(delta: CGFloat, guide: CGFloat)] = [
+            (safeInset - frame.minX, safeInset),
+            (0.5 - frame.midX, 0.5),
+            ((1 - safeInset) - frame.maxX, 1 - safeInset)
+        ]
+        var yCandidates: [(delta: CGFloat, guide: CGFloat)] = [
+            (safeInset - frame.minY, safeInset),
+            (0.5 - frame.midY, 0.5),
+            ((1 - safeInset) - frame.maxY, 1 - safeInset)
+        ]
+        for peer in peerFrames {
+            xCandidates.append(contentsOf: [
+                (peer.minX - frame.minX, peer.minX),
+                (peer.midX - frame.midX, peer.midX),
+                (peer.maxX - frame.maxX, peer.maxX)
+            ])
+            yCandidates.append(contentsOf: [
+                (peer.minY - frame.minY, peer.minY),
+                (peer.midY - frame.midY, peer.midY),
+                (peer.maxY - frame.maxY, peer.maxY)
+            ])
+        }
+
+        let xMatch = xCandidates.min { abs($0.delta) < abs($1.delta) }
+        let yMatch = yCandidates.min { abs($0.delta) < abs($1.delta) }
+        let vertical = xMatch.flatMap { match -> CGFloat? in
+            guard abs(match.delta) <= threshold else { return nil }
+            result.origin.x += match.delta
+            return match.guide
+        }
+        let horizontal = yMatch.flatMap { match -> CGFloat? in
+            guard abs(match.delta) <= threshold else { return nil }
+            result.origin.y += match.delta
+            return match.guide
+        }
+        return MemoryBookEditorSnapResult(
+            frame: result,
+            guides: MemoryBookEditorSnapGuides(vertical: vertical, horizontal: horizontal)
+        )
+    }
+}
 
 /// How an image occupies its user-owned frame. `fit` deliberately preserves
 /// every pixel (with the page paper visible around it); `fill` is the familiar
@@ -1279,6 +1567,204 @@ enum MemoryBookTextColor: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// Persisted, renderer-independent styling for a page element. Measurements
+/// are ratios of the paper width so the same composition scales from the
+/// editor viewport to Letter/A4 PDF without point-size drift.
+enum MemoryBookElementMask: String, Codable, Sendable, CaseIterable {
+    case rectangle, roundedRectangle, ellipse
+
+    var displayName: String {
+        switch self {
+        case .rectangle: "Square"
+        case .roundedRectangle: "Rounded"
+        case .ellipse: "Oval"
+        }
+    }
+}
+
+enum MemoryBookElementBorderStyle: String, Codable, Sendable, CaseIterable {
+    case none, solid, dashed
+
+    var displayName: String { rawValue.capitalized }
+}
+
+struct MemoryBookElementAppearance: Codable, Equatable, Sendable {
+    var opacity: Double
+    var mask: MemoryBookElementMask
+    var cornerRadiusRatio: CGFloat
+    var borderStyle: MemoryBookElementBorderStyle
+    var borderWidthRatio: CGFloat
+    var borderColor: MemoryBookRGB
+    var shadowOpacity: Double
+    var shadowBlurRatio: CGFloat
+    var shadowOffset: CGSize
+    /// Used by decoration elements. Nil lets image/text elements preserve
+    /// their source content without inventing a background fill.
+    var fillColor: MemoryBookRGB? = nil
+
+    static let `default` = MemoryBookElementAppearance(
+        opacity: 1,
+        mask: .roundedRectangle,
+        cornerRadiusRatio: 4 / 612,
+        borderStyle: .none,
+        borderWidthRatio: 2 / 612,
+        borderColor: .init(red: 1, green: 1, blue: 1),
+        shadowOpacity: 0,
+        shadowBlurRatio: 8 / 612,
+        shadowOffset: CGSize(width: 0, height: 4 / 612)
+    )
+
+    mutating func normalize() {
+        opacity = min(1, max(0.1, opacity))
+        cornerRadiusRatio = min(0.20, max(0, cornerRadiusRatio))
+        borderWidthRatio = min(0.03, max(0, borderWidthRatio))
+        shadowOpacity = min(0.8, max(0, shadowOpacity))
+        shadowBlurRatio = min(0.08, max(0, shadowBlurRatio))
+        shadowOffset.width = min(0.10, max(-0.10, shadowOffset.width))
+        shadowOffset.height = min(0.10, max(-0.10, shadowOffset.height))
+    }
+}
+
+/// Non-destructive photo finishing values. Neutral defaults preserve legacy
+/// documents byte-for-byte at the model level; renderers clamp again before
+/// handing the values to Core Image.
+struct MemoryBookImageAdjustments: Codable, Equatable, Sendable {
+    var exposure: Double = 0
+    var brightness: Double = 0
+    var contrast: Double = 1
+    var saturation: Double = 1
+    var warmth: Double = 0
+    var highlights: Double = 0
+    var shadows: Double = 0
+    var vignette: Double = 0
+    var sharpness: Double = 0
+
+    static let `default` = MemoryBookImageAdjustments()
+
+    mutating func normalize() {
+        exposure = min(2, max(-2, exposure))
+        brightness = min(0.5, max(-0.5, brightness))
+        contrast = min(1.5, max(0.5, contrast))
+        saturation = min(2, max(0, saturation))
+        warmth = min(1, max(-1, warmth))
+        highlights = min(1, max(0, highlights))
+        shadows = min(1, max(-1, shadows))
+        vignette = min(1, max(0, vignette))
+        sharpness = min(1, max(0, sharpness))
+    }
+
+    var isNeutral: Bool { self == .default }
+}
+
+/// Reversible source-image geometry that lives inside the composition frame.
+/// `MemoryBookElement.rotationDegrees` rotates the complete frame; these
+/// values straighten or mirror only the photograph clipped inside it.
+struct MemoryBookImageTransformAdjustments: Codable, Equatable, Sendable {
+    var straightenDegrees: Double = 0
+    var flipHorizontal: Bool = false
+    var flipVertical: Bool = false
+
+    static let `default` = MemoryBookImageTransformAdjustments()
+
+    mutating func normalize() {
+        straightenDegrees = min(15, max(-15, straightenDegrees))
+        if abs(straightenDegrees) < 0.05 { straightenDegrees = 0 }
+    }
+}
+
+enum MemoryBookImageProcessor {
+    private static let context = CIContext(options: [.cacheIntermediates: true])
+
+    static func process(_ image: UIImage, treatment: MemoryBookImageTreatment, adjustments source: MemoryBookImageAdjustments = .default) -> UIImage {
+        if treatment == .original, source.isNeutral { return image }
+        guard let cgImage = image.cgImage else { return image }
+        var adjustments = source
+        adjustments.normalize()
+        var output = CIImage(cgImage: cgImage)
+
+        if treatment == .mono, let filter = CIFilter(name: "CIPhotoEffectMono") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            output = filter.outputImage ?? output
+        }
+        if adjustments.exposure != 0, let filter = CIFilter(name: "CIExposureAdjust") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(adjustments.exposure, forKey: kCIInputEVKey)
+            output = filter.outputImage ?? output
+        }
+        if adjustments.brightness != 0 || adjustments.contrast != 1 || adjustments.saturation != 1,
+           let filter = CIFilter(name: "CIColorControls") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(adjustments.brightness, forKey: kCIInputBrightnessKey)
+            filter.setValue(adjustments.contrast, forKey: kCIInputContrastKey)
+            filter.setValue(adjustments.saturation, forKey: kCIInputSaturationKey)
+            output = filter.outputImage ?? output
+        }
+        if adjustments.warmth != 0, let filter = CIFilter(name: "CITemperatureAndTint") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(CIVector(x: 6_500, y: 0), forKey: "inputNeutral")
+            filter.setValue(CIVector(x: 6_500 + adjustments.warmth * 2_500, y: 0), forKey: "inputTargetNeutral")
+            output = filter.outputImage ?? output
+        }
+        if adjustments.highlights != 0 || adjustments.shadows != 0,
+           let filter = CIFilter(name: "CIHighlightShadowAdjust") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(1 - adjustments.highlights, forKey: "inputHighlightAmount")
+            filter.setValue(adjustments.shadows, forKey: "inputShadowAmount")
+            output = filter.outputImage ?? output
+        }
+        if adjustments.vignette > 0, let filter = CIFilter(name: "CIVignette") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(adjustments.vignette * 1.5, forKey: kCIInputIntensityKey)
+            filter.setValue(min(output.extent.width, output.extent.height) * 0.45, forKey: kCIInputRadiusKey)
+            output = filter.outputImage ?? output
+        }
+        if adjustments.sharpness > 0, let filter = CIFilter(name: "CISharpenLuminance") {
+            filter.setValue(output, forKey: kCIInputImageKey)
+            filter.setValue(adjustments.sharpness, forKey: kCIInputSharpnessKey)
+            output = filter.outputImage ?? output
+        }
+        guard let rendered = context.createCGImage(output, from: output.extent) else { return image }
+        return UIImage(cgImage: rendered, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    /// A deliberately restrained, deterministic starting point. It analyses
+    /// only average luminance and never crops, detects faces or changes the
+    /// original asset. Users can refine every returned value afterwards.
+    static func conservativeAutoEnhancement(for image: UIImage) -> MemoryBookImageAdjustments {
+        guard let cgImage = image.cgImage else { return .default }
+        let input = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIAreaAverage") else { return .default }
+        filter.setValue(input, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgRect: input.extent), forKey: kCIInputExtentKey)
+        guard let output = filter.outputImage else { return .default }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        context.render(
+            output,
+            toBitmap: &pixel,
+            rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+        let red = Double(pixel[0]) / 255
+        let green = Double(pixel[1]) / 255
+        let blue = Double(pixel[2]) / 255
+        let luminance = max(0.02, 0.2126 * red + 0.7152 * green + 0.0722 * blue)
+        let exposure = min(0.45, max(-0.35, log2(0.48 / luminance)))
+        return MemoryBookImageAdjustments(
+            exposure: exposure,
+            brightness: 0,
+            contrast: 1.04,
+            saturation: 1.03,
+            warmth: 0,
+            highlights: luminance > 0.62 ? 0.14 : 0.06,
+            shadows: luminance < 0.42 ? 0.18 : 0.08,
+            vignette: 0,
+            sharpness: 0.12
+        )
+    }
+}
+
 /// A page element uses normalized coordinates (0...1), so the same edit can be
 /// rendered in SwiftUI preview and in a Letter/A4 PDF without coordinate drift.
 struct MemoryBookElement: Identifiable, Codable, Equatable, Sendable {
@@ -1301,40 +1787,87 @@ struct MemoryBookElement: Identifiable, Codable, Equatable, Sendable {
     /// Optional exact color selected from the native iOS color picker. When
     /// nil, the named Tailor palette color remains the source of truth.
     var textCustomColor: MemoryBookRGB?
+    var textTypographyAdjustments: MemoryBookTextTypographyAdjustments
     /// Nil is supported only for legacy/system text.  Newly generated editable
     /// text always has an explicit product field role.
     var textField: MemoryBookTextField?
     var isLayoutLocked: Bool
+    /// User-facing interaction lock. This is intentionally separate from
+    /// `isLayoutLocked`, which protects authored geometry from auto-arrange.
+    var isInteractionLocked: Bool
+    /// Page-local grouping identity. Grouping affects editor selection and
+    /// transforms only; renderers continue drawing the original elements.
+    var groupID: UUID?
+    var isHidden: Bool
+    var appearance: MemoryBookElementAppearance
+    var imageAdjustments: MemoryBookImageAdjustments
+    var imageTransformAdjustments: MemoryBookImageTransformAdjustments
     var origin: MemoryBookElementOrigin
     var updatedAt: Date
 
-    init(id: UUID = UUID(), kind: MemoryBookElementKind, assetID: UUID? = nil, text: String? = nil, normalizedFrame: CGRect, cropScale: CGFloat = 1, cropOffset: CGSize = .zero, rotationDegrees: Double = 0, zIndex: Int = 0, textStyle: MemoryBookTextStyle = .standard, textFontScale: CGFloat = 1, imageContentMode: MemoryBookImageContentMode = .fit, textFont: MemoryBookTextFont = .editorial, textColor: MemoryBookTextColor = .ink, textCustomColor: MemoryBookRGB? = nil, textField: MemoryBookTextField? = nil, isLayoutLocked: Bool = false, origin: MemoryBookElementOrigin = .automatic, updatedAt: Date = .now) {
+    init(id: UUID = UUID(), kind: MemoryBookElementKind, assetID: UUID? = nil, text: String? = nil, normalizedFrame: CGRect, cropScale: CGFloat = 1, cropOffset: CGSize = .zero, rotationDegrees: Double = 0, zIndex: Int = 0, textStyle: MemoryBookTextStyle = .standard, textFontScale: CGFloat = 1, imageContentMode: MemoryBookImageContentMode = .fill, textFont: MemoryBookTextFont = .editorial, textColor: MemoryBookTextColor = .ink, textCustomColor: MemoryBookRGB? = nil, textTypographyAdjustments: MemoryBookTextTypographyAdjustments = .default, textField: MemoryBookTextField? = nil, isLayoutLocked: Bool = false, isInteractionLocked: Bool = false, groupID: UUID? = nil, isHidden: Bool = false, appearance: MemoryBookElementAppearance = .default, imageAdjustments: MemoryBookImageAdjustments = .default, imageTransformAdjustments: MemoryBookImageTransformAdjustments = .default, origin: MemoryBookElementOrigin = .automatic, updatedAt: Date = .now) {
         self.id = id; self.kind = kind; self.assetID = assetID; self.text = text
         self.normalizedFrame = normalizedFrame; self.cropScale = cropScale; self.cropOffset = cropOffset
-        self.rotationDegrees = rotationDegrees; self.zIndex = zIndex; self.textStyle = textStyle; self.textFontScale = textFontScale; self.imageContentMode = imageContentMode; self.textFont = textFont; self.textColor = textColor; self.textCustomColor = textCustomColor; self.textField = textField; self.isLayoutLocked = isLayoutLocked
-        self.origin = origin; self.updatedAt = updatedAt
+        self.rotationDegrees = rotationDegrees; self.zIndex = zIndex; self.textStyle = textStyle; self.textFontScale = textFontScale; self.imageContentMode = imageContentMode; self.textFont = textFont; self.textColor = textColor; self.textCustomColor = textCustomColor; self.textTypographyAdjustments = textTypographyAdjustments; self.textField = textField; self.isLayoutLocked = isLayoutLocked; self.isInteractionLocked = isInteractionLocked; self.groupID = groupID; self.isHidden = isHidden
+        self.appearance = appearance; self.imageAdjustments = imageAdjustments; self.imageTransformAdjustments = imageTransformAdjustments; self.origin = origin; self.updatedAt = updatedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, assetID, text, normalizedFrame, cropScale, cropOffset, rotationDegrees, zIndex, textStyle, textFontScale, imageContentMode, textFont, textColor, textCustomColor, textField, isLayoutLocked, origin, updatedAt }
+    private struct LegacyPoint: Decodable { let x: CGFloat; let y: CGFloat }
+    private struct LegacySize: Decodable { let width: CGFloat; let height: CGFloat }
+    private struct LegacyRect: Decodable { let origin: LegacyPoint; let size: LegacySize }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, assetID, text, normalizedFrame, cropScale, cropOffset, rotationDegrees, zIndex, textStyle, textFontScale, imageContentMode, textFont, textColor, textCustomColor, textTypographyAdjustments, textField, isLayoutLocked, isInteractionLocked, groupID, isHidden, appearance, imageAdjustments, imageTransformAdjustments, origin, updatedAt }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(UUID.self, forKey: .id); kind = try values.decode(MemoryBookElementKind.self, forKey: .kind)
         assetID = try values.decodeIfPresent(UUID.self, forKey: .assetID); text = try values.decodeIfPresent(String.self, forKey: .text)
-        normalizedFrame = try values.decode(CGRect.self, forKey: .normalizedFrame)
+        if let frame = try? values.decode(CGRect.self, forKey: .normalizedFrame) {
+            normalizedFrame = frame
+        } else {
+            // Swift's Codable representation for CGRect changed across SDK
+            // generations. Existing Tailor documents used the keyed
+            // origin/size shape, so continue accepting it during migration.
+            let frame = try values.decode(LegacyRect.self, forKey: .normalizedFrame)
+            normalizedFrame = CGRect(
+                x: frame.origin.x,
+                y: frame.origin.y,
+                width: frame.size.width,
+                height: frame.size.height
+            )
+        }
         cropScale = try values.decodeIfPresent(CGFloat.self, forKey: .cropScale) ?? 1
-        cropOffset = try values.decodeIfPresent(CGSize.self, forKey: .cropOffset) ?? .zero
+        if !values.contains(.cropOffset) {
+            cropOffset = .zero
+        } else if let offset = try? values.decode(CGSize.self, forKey: .cropOffset) {
+            cropOffset = offset
+        } else {
+            let offset = try values.decode(LegacySize.self, forKey: .cropOffset)
+            cropOffset = CGSize(width: offset.width, height: offset.height)
+        }
         rotationDegrees = try values.decodeIfPresent(Double.self, forKey: .rotationDegrees) ?? 0
         zIndex = try values.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
         textStyle = try values.decodeIfPresent(MemoryBookTextStyle.self, forKey: .textStyle) ?? .standard
         textFontScale = min(2.4, max(0.5, try values.decodeIfPresent(CGFloat.self, forKey: .textFontScale) ?? 1))
-        // A missing legacy value must preserve the complete original photo.
-        // Cropping is an explicit editor choice, never a migration default.
-        imageContentMode = try values.decodeIfPresent(MemoryBookImageContentMode.self, forKey: .imageContentMode) ?? .fit
+        // Legacy template images were aspect-fill. Preserve that appearance;
+        // Fit remains available only when a user or newer document records it
+        // explicitly.
+        imageContentMode = try values.decodeIfPresent(MemoryBookImageContentMode.self, forKey: .imageContentMode) ?? .fill
         textFont = try values.decodeIfPresent(MemoryBookTextFont.self, forKey: .textFont) ?? .editorial
         textColor = try values.decodeIfPresent(MemoryBookTextColor.self, forKey: .textColor) ?? .ink
         textCustomColor = try values.decodeIfPresent(MemoryBookRGB.self, forKey: .textCustomColor)
+        textTypographyAdjustments = try values.decodeIfPresent(MemoryBookTextTypographyAdjustments.self, forKey: .textTypographyAdjustments) ?? .default
+        textTypographyAdjustments.normalize()
         textField = try values.decodeIfPresent(MemoryBookTextField.self, forKey: .textField)
         isLayoutLocked = try values.decodeIfPresent(Bool.self, forKey: .isLayoutLocked) ?? false
+        isInteractionLocked = try values.decodeIfPresent(Bool.self, forKey: .isInteractionLocked) ?? false
+        groupID = try values.decodeIfPresent(UUID.self, forKey: .groupID)
+        isHidden = try values.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        appearance = try values.decodeIfPresent(MemoryBookElementAppearance.self, forKey: .appearance) ?? .default
+        appearance.normalize()
+        imageAdjustments = try values.decodeIfPresent(MemoryBookImageAdjustments.self, forKey: .imageAdjustments) ?? .default
+        imageAdjustments.normalize()
+        imageTransformAdjustments = try values.decodeIfPresent(MemoryBookImageTransformAdjustments.self, forKey: .imageTransformAdjustments) ?? .default
+        imageTransformAdjustments.normalize()
         origin = try values.decodeIfPresent(MemoryBookElementOrigin.self, forKey: .origin) ?? .automatic
         updatedAt = try values.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
     }
@@ -1352,14 +1885,16 @@ struct MemoryBookPage: Identifiable, Codable, Equatable, Sendable {
     var pageNumber: Int
     var elements: [MemoryBookElement]
     var styleOverride: AlbumStyle?
+    /// Nil preserves the selected style's authored paper color.
+    var backgroundColor: MemoryBookRGB?
     var isLocked: Bool
 
-    init(id: UUID = UUID(), kind: MemoryBookPageKind, title: String, subtitle: String = "", chapterID: UUID? = nil, photoIDs: [UUID] = [], layout: MemoryBookLayout = .note, pageNumber: Int, elements: [MemoryBookElement] = [], styleOverride: AlbumStyle? = nil, isLocked: Bool = false) {
+    init(id: UUID = UUID(), kind: MemoryBookPageKind, title: String, subtitle: String = "", chapterID: UUID? = nil, photoIDs: [UUID] = [], layout: MemoryBookLayout = .note, pageNumber: Int, elements: [MemoryBookElement] = [], styleOverride: AlbumStyle? = nil, backgroundColor: MemoryBookRGB? = nil, isLocked: Bool = false) {
         self.id = id; self.kind = kind; self.title = title; self.subtitle = subtitle
-        self.chapterID = chapterID; self.photoIDs = photoIDs; self.layout = layout; self.pageNumber = pageNumber; self.elements = elements; self.styleOverride = styleOverride; self.isLocked = isLocked
+        self.chapterID = chapterID; self.photoIDs = photoIDs; self.layout = layout; self.pageNumber = pageNumber; self.elements = elements; self.styleOverride = styleOverride; self.backgroundColor = backgroundColor; self.isLocked = isLocked
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, title, subtitle, chapterID, photoIDs, layout, pageNumber, elements, styleOverride, isLocked }
+    private enum CodingKeys: String, CodingKey { case id, kind, title, subtitle, chapterID, photoIDs, layout, pageNumber, elements, styleOverride, backgroundColor, isLocked }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(UUID.self, forKey: .id); kind = try values.decode(MemoryBookPageKind.self, forKey: .kind)
@@ -1368,6 +1903,7 @@ struct MemoryBookPage: Identifiable, Codable, Equatable, Sendable {
         layout = try values.decode(MemoryBookLayout.self, forKey: .layout); pageNumber = try values.decode(Int.self, forKey: .pageNumber)
         elements = try values.decodeIfPresent([MemoryBookElement].self, forKey: .elements) ?? []
         styleOverride = try values.decodeIfPresent(AlbumStyle.self, forKey: .styleOverride)
+        backgroundColor = try values.decodeIfPresent(MemoryBookRGB.self, forKey: .backgroundColor)
         isLocked = try values.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 }
@@ -1392,6 +1928,32 @@ struct MemoryBookDocument: Identifiable, Codable, Equatable, Sendable {
 }
 
 enum MemoryBookIssueSeverity: String, Codable, Sendable { case blocking, suggestion }
+
+struct MemoryBookElementFrameRepair: Equatable, Sendable {
+    let elementID: UUID
+    let frame: CGRect
+}
+
+/// The exact document mutation behind a Book Check suggestion. Keeping the
+/// target geometry in the issue makes the repair explainable, deterministic
+/// and testable instead of rerunning a potentially different heuristic after
+/// the user taps Fix.
+enum MemoryBookIssueRepair: Equatable, Sendable {
+    case elementFrames([MemoryBookElementFrameRepair])
+    case recenterElementFrames([MemoryBookElementFrameRepair])
+    case elementRotation(Double)
+    case textColor(MemoryBookRGB)
+
+    var actionLabel: String {
+        switch self {
+        case .elementFrames: "Align"
+        case .recenterElementFrames: "Balance page"
+        case .elementRotation: "Straighten"
+        case .textColor: "Improve contrast"
+        }
+    }
+}
+
 struct MemoryBookIssue: Identifiable, Equatable, Sendable {
     var id = UUID()
     var severity: MemoryBookIssueSeverity
@@ -1404,6 +1966,7 @@ struct MemoryBookIssue: Identifiable, Equatable, Sendable {
     /// guesses which text box to open from display order or z-index.
     var field: MemoryBookTextField?
     var message: String
+    var repair: MemoryBookIssueRepair?
 
     init(
         id: UUID = UUID(),
@@ -1411,7 +1974,8 @@ struct MemoryBookIssue: Identifiable, Equatable, Sendable {
         pageID: UUID?,
         elementID: UUID? = nil,
         field: MemoryBookTextField? = nil,
-        message: String
+        message: String,
+        repair: MemoryBookIssueRepair? = nil
     ) {
         self.id = id
         self.severity = severity
@@ -1419,6 +1983,7 @@ struct MemoryBookIssue: Identifiable, Equatable, Sendable {
         self.elementID = elementID
         self.field = field
         self.message = message
+        self.repair = repair
     }
 }
 
@@ -1546,10 +2111,21 @@ extension MemoryBookDocument {
         return plan.textLayout(for: migratedElement)
     }
 
+    func textReadability(for element: MemoryBookElement, on page: MemoryBookPage) -> MemoryBookTextReadabilityAssessment? {
+        guard element.kind == .text else { return nil }
+        let migrated = migratedLegacyTextFields()
+        guard let migratedPage = migrated.pages.first(where: { $0.id == page.id }),
+              let migratedElement = migratedPage.elements.first(where: { $0.id == element.id }) else { return nil }
+        let plan = MemoryBookPageRenderPlan(page: migratedPage, document: migrated, pageSize: MemoryBookPageRenderPlan.points(for: pageSize))
+        guard let layout = plan.textLayout(for: migratedElement) else { return nil }
+        return Self.readabilityAssessment(element: migratedElement, layout: layout, plan: plan)
+    }
+
     func textLayout(
         text: String,
         style: MemoryBookTextStyle,
         fontScale: CGFloat = 1,
+        typography: MemoryBookTextTypographyAdjustments = .default,
         normalizedFrame: CGRect,
         on page: MemoryBookPage,
         zIndex: Int = 20,
@@ -1557,7 +2133,7 @@ extension MemoryBookDocument {
     ) -> MemoryBookTextLayoutSnapshot {
         let migrated = migratedLegacyTextFields()
         let migratedPage = migrated.pages.first(where: { $0.id == page.id }) ?? page
-        let probe = MemoryBookElement(kind: .text, text: text, normalizedFrame: normalizedFrame, zIndex: zIndex, textStyle: style, textFontScale: fontScale, textField: field)
+        let probe = MemoryBookElement(kind: .text, text: text, normalizedFrame: normalizedFrame, zIndex: zIndex, textStyle: style, textFontScale: fontScale, textTypographyAdjustments: typography, textField: field)
         let plan = MemoryBookPageRenderPlan(page: migratedPage, document: migrated, pageSize: MemoryBookPageRenderPlan.points(for: pageSize))
         return MemoryBookPageRenderPlan.makeTextLayout(
             element: probe,
@@ -1570,6 +2146,67 @@ extension MemoryBookDocument {
         )
     }
 
+    func textReadability(
+        style: MemoryBookTextStyle,
+        fontScale: CGFloat = 1,
+        color: MemoryBookTextColor = .ink,
+        customColor: MemoryBookRGB? = nil,
+        normalizedFrame: CGRect,
+        on page: MemoryBookPage,
+        zIndex: Int = 20,
+        field: MemoryBookTextField? = nil
+    ) -> MemoryBookTextReadabilityAssessment {
+        let migrated = migratedLegacyTextFields()
+        let migratedPage = migrated.pages.first(where: { $0.id == page.id }) ?? page
+        let probe = MemoryBookElement(
+            kind: .text,
+            text: "Readability",
+            normalizedFrame: normalizedFrame,
+            zIndex: zIndex,
+            textStyle: style,
+            textFontScale: fontScale,
+            textColor: color,
+            textCustomColor: customColor,
+            textField: field
+        )
+        let plan = MemoryBookPageRenderPlan(page: migratedPage, document: migrated, pageSize: MemoryBookPageRenderPlan.points(for: pageSize))
+        let layout = MemoryBookPageRenderPlan.makeTextLayout(
+            element: probe,
+            pageKind: migratedPage.kind,
+            pageSize: plan.pageSize,
+            paperRect: plan.paperRect,
+            safeRect: plan.safeRect,
+            style: plan.style,
+            watermarked: false
+        )
+        return Self.readabilityAssessment(element: probe, layout: layout, plan: plan)
+    }
+
+    private static func readabilityAssessment(
+        element: MemoryBookElement,
+        layout: MemoryBookTextLayoutSnapshot,
+        plan: MemoryBookPageRenderPlan
+    ) -> MemoryBookTextReadabilityAssessment {
+        let fallback = plan.fontToken(for: element) == .display ? plan.style.ink : plan.style.secondary
+        let foreground = element.textCustomColor ?? element.textColor.rgb(fallback: fallback)
+        let coordinatedInk = plan.style.ink
+        let black = MemoryBookRGB(red: 0, green: 0, blue: 0)
+        let white = MemoryBookRGB(red: 1, green: 1, blue: 1)
+        let candidates = [coordinatedInk, black, white]
+        let recommended = candidates.max { lhs, rhs in
+            lhs.contrastRatio(with: plan.paperColor) < rhs.contrastRatio(with: plan.paperColor)
+        } ?? coordinatedInk
+        return .init(
+            fontSize: layout.spec.fontSize,
+            contrastRatio: foreground.contrastRatio(with: plan.paperColor),
+            foreground: foreground,
+            background: plan.paperColor,
+            recommendedForeground: coordinatedInk.contrastRatio(with: plan.paperColor) >= MemoryBookTextReadabilityAssessment.minimumContrastRatio
+                ? coordinatedInk
+                : recommended
+        )
+    }
+
     /// Measures an in-progress editor draft using the same TextLayoutSpec that
     /// Preview/PDF put into their render plan.  A sheet must never fall back to
     /// a character-count estimate while the saved book uses true line boxes.
@@ -1577,6 +2214,7 @@ extension MemoryBookDocument {
         text: String,
         style: MemoryBookTextStyle,
         fontScale: CGFloat = 1,
+        typography: MemoryBookTextTypographyAdjustments = .default,
         normalizedFrame: CGRect,
         on page: MemoryBookPage,
         zIndex: Int = 20,
@@ -1586,6 +2224,7 @@ extension MemoryBookDocument {
             text: text,
             style: style,
             fontScale: fontScale,
+            typography: typography,
             normalizedFrame: normalizedFrame,
             on: page,
             zIndex: zIndex,
@@ -1597,6 +2236,7 @@ extension MemoryBookDocument {
         text: String,
         style: MemoryBookTextStyle,
         fontScale: CGFloat = 1,
+        typography: MemoryBookTextTypographyAdjustments = .default,
         normalizedFrame: CGRect,
         on page: MemoryBookPage,
         zIndex: Int,
@@ -1605,7 +2245,7 @@ extension MemoryBookDocument {
         MemoryBookTextDraftValidation(
             characterLimit: field.characterLimit,
             characterCount: text.count,
-            measurement: textLayout(text: text, style: style, fontScale: fontScale, normalizedFrame: normalizedFrame, on: page, zIndex: zIndex, field: field).measurement
+            measurement: textLayout(text: text, style: style, fontScale: fontScale, typography: typography, normalizedFrame: normalizedFrame, on: page, zIndex: zIndex, field: field).measurement
         )
     }
 
@@ -1755,7 +2395,7 @@ extension MemoryBookDocument {
         let constraint = FillCropConstraint(
             sourceAspect: aspect,
             containerAspect: element.normalizedFrame.width / max(0.01, element.normalizedFrame.height),
-            rotationDegrees: element.rotationDegrees
+            rotationDegrees: element.rotationDegrees + element.imageTransformAdjustments.straightenDegrees
         )
         let transform = constraint.normalized(scale: scale, offset: offset)
         pages[pageIndex].elements[elementIndex].cropScale = transform.scale
@@ -1784,6 +2424,59 @@ extension MemoryBookDocument {
         updatedAt = .now
     }
 
+    /// Applies a coordinated look only to eligible pages. Element geometry,
+    /// custom backgrounds and every locked page stay byte-for-byte unchanged;
+    /// callers can therefore offer page/chapter scope as one safe Undo step.
+    @discardableResult
+    mutating func applyStyleOverride(_ style: AlbumStyle?, to pageIDs: Set<UUID>) -> Int {
+        var changed = 0
+        for index in pages.indices where pageIDs.contains(pages[index].id) && !pages[index].isLocked && pages[index].styleOverride != style {
+            pages[index].styleOverride = style
+            changed += 1
+        }
+        if changed > 0 { updatedAt = .now }
+        return changed
+    }
+
+    /// Applies a conservative first crop only to untouched automatic images.
+    /// User geometry and crop decisions are never recalculated when metadata
+    /// changes or when a document is reopened.
+    @discardableResult
+    mutating func applyAutomaticFocalCrops() -> Int {
+        var changed = 0
+        let photosByID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+        let paperSize = MemoryBookPageRenderPlan.points(for: pageSize)
+        for pageIndex in pages.indices {
+            for elementIndex in pages[pageIndex].elements.indices {
+                let element = pages[pageIndex].elements[elementIndex]
+                guard element.kind == .image,
+                      element.origin == .automatic,
+                      element.imageContentMode == .fill,
+                      element.cropScale == 1,
+                      element.cropOffset == .zero,
+                      element.rotationDegrees == 0,
+                      element.imageTransformAdjustments == .default,
+                      let assetID = element.assetID,
+                      let photo = photosByID[assetID],
+                      let subjectRegion = photo.subjectRegion else { continue }
+                let frame = element.normalizedFrame
+                let offset = FocalCropPolicy.recommendedOffset(
+                    subjectRegion: subjectRegion,
+                    sourceAspect: photo.aspectRatio,
+                    // `normalizedFrame` is expressed in page fractions, not
+                    // square pixels. Include the selected paper's physical
+                    // aspect so the initial crop matches Editor/Reader/PDF.
+                    containerAspect: (frame.width * paperSize.width) / max(0.01, frame.height * paperSize.height)
+                )
+                guard abs(offset.width) > 0.0001 || abs(offset.height) > 0.0001 else { continue }
+                pages[pageIndex].elements[elementIndex].cropOffset = offset
+                changed += 1
+            }
+        }
+        if changed > 0 { updatedAt = .now }
+        return changed
+    }
+
     /// The app supplies the same predicate used by the canvas and exporter.
     /// The default keeps model-only tests independent of a real Photos library.
     func checkBook(assetIsAvailable: (ArchivePhoto) -> Bool = { _ in true }) -> [MemoryBookIssue] {
@@ -1795,7 +2488,12 @@ extension MemoryBookDocument {
         let validIDs = Set(document.eligiblePhotos.map(\.id))
         var placements = [UUID: [UUID]]()
         for page in document.pages {
-            for element in page.elements where element.kind == .image {
+            let plan = MemoryBookPageRenderPlan(
+                page: page,
+                document: document,
+                pageSize: MemoryBookPageRenderPlan.points(for: document.pageSize)
+            )
+            for element in page.elements where element.kind == .image && !element.isHidden {
                 if let assetID = element.assetID,
                    let photo = document.photos.first(where: { $0.id == assetID }),
                    (!validIDs.contains(assetID) || !assetIsAvailable(photo)) {
@@ -1803,29 +2501,299 @@ extension MemoryBookDocument {
                 } else if let assetID = element.assetID, !validIDs.contains(assetID) {
                     issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, message: "A photo is no longer available. Replace it before export."))
                 }
+                if let assetID = element.assetID,
+                   let photo = document.photos.first(where: { $0.id == assetID }),
+                   let ppi = MemoryBookPrintQuality.effectivePPI(
+                    container: plan.rect(for: element.normalizedFrame),
+                    photo: photo,
+                    element: element
+                   ), ppi < MemoryBookPrintQuality.preferredPPI {
+                    let rounded = Int(ppi.rounded())
+                    let message = "This photo provides about \(rounded) PPI at its current print size. Use a higher-resolution photo or make the frame smaller for a sharper print."
+                    issues.append(MemoryBookIssue(
+                        severity: ppi < MemoryBookPrintQuality.minimumPPI ? .blocking : .suggestion,
+                        pageID: page.id,
+                        elementID: element.id,
+                        message: message
+                    ))
+                }
+                if element.origin == .automatic,
+                   element.imageContentMode == .fill,
+                   element.cropScale == 1,
+                   element.cropOffset == .zero,
+                   element.imageTransformAdjustments == .default,
+                   let assetID = element.assetID,
+                   let photo = document.photos.first(where: { $0.id == assetID }),
+                   photo.subjectRegion == nil {
+                    let container = plan.rect(for: element.normalizedFrame)
+                    let visibleFraction = MemoryBookCropQuality.visibleSourceFraction(
+                        sourceAspect: photo.aspectRatio,
+                        containerAspect: container.width / max(1, container.height)
+                    )
+                    if visibleFraction < MemoryBookCropQuality.minimumUnreviewedVisibleFraction {
+                        let croppedPercent = Int(((1 - visibleFraction) * 100).rounded())
+                        issues.append(MemoryBookIssue(
+                            severity: .blocking,
+                            pageID: page.id,
+                            elementID: element.id,
+                            message: "This automatic frame crops about \(croppedPercent)% of the photo and no subject focus is available. Open Crop and confirm the framing before export."
+                        ))
+                    }
+                }
                 if let assetID = element.assetID { placements[assetID, default: []].append(page.id) }
             }
-            if page.kind == .photoSelection && !page.isLocked && !page.elements.contains(where: { $0.kind == .image }) {
+            if page.kind == .photoSelection && !page.isLocked && !page.elements.contains(where: { $0.kind == .image && !$0.isHidden }) {
                 issues.append(MemoryBookIssue(severity: .suggestion, pageID: page.id, message: "This photo page is empty. Add a photo, keep it as a note page, or remove it."))
             }
-            for element in page.elements where element.kind == .text {
+            for element in page.elements where element.kind == .text && !element.isHidden {
                 if (element.text ?? "").count > document.textCharacterLimit(for: element, on: page) {
                     issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, field: element.textField, message: "Text is longer than this page allows. Shorten it before export."))
                 }
                 if document.textMeasurement(for: element, on: page)?.overflows == true {
                     issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, field: element.textField, message: "Text overflows its frame. Use Fit text before export."))
                 }
+                if let readability = document.textReadability(for: element, on: page) {
+                    if !readability.isPrintSizeReadable {
+                        issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, field: element.textField, message: "Text is too small for reliable print. Increase its size before export."))
+                    }
+                    let hasAuthoredColorCombination = page.backgroundColor != nil || element.textCustomColor != nil || element.textColor != .ink
+                    if !readability.hasSufficientContrast, hasAuthoredColorCombination {
+                        issues.append(MemoryBookIssue(
+                            severity: .suggestion,
+                            pageID: page.id,
+                            elementID: element.id,
+                            field: element.textField,
+                            message: String(format: "Text contrast is low (%.1f:1). Use a clearer color for more readable print.", readability.contrastRatio),
+                            repair: element.isInteractionLocked ? nil : .textColor(readability.recommendedForeground)
+                        ))
+                    }
+                }
             }
+            issues.append(contentsOf: document.compositionIssues(on: page))
         }
-        for (_, pageIDs) in placements where pageIDs.count > 1 {
-            for pageID in Set(pageIDs) {
-                issues.append(MemoryBookIssue(severity: .suggestion, pageID: pageID, message: "This photo appears more than once in the book."))
-            }
+        for (_, pageIDs) in placements.sorted(by: { $0.key.uuidString < $1.key.uuidString }) where pageIDs.count > 1 {
+            let uniquePageIDs = Array(Set(pageIDs)).sorted(by: { $0.uuidString < $1.uuidString })
+            issues.append(MemoryBookIssue(
+                severity: .suggestion,
+                pageID: uniquePageIDs.first,
+                message: "This photo appears more than once (on \(uniquePageIDs.count) pages). Keep the repetition only if it is intentional."
+            ))
         }
-        if !document.pages.contains(where: { $0.elements.contains(where: { $0.kind == .image }) }) {
+        if !document.pages.contains(where: { $0.elements.contains(where: { $0.kind == .image && !$0.isHidden }) }) {
             issues.append(MemoryBookIssue(severity: .blocking, pageID: nil, message: "Add at least one photo before exporting."))
         }
         return issues
+    }
+
+    /// Conservative beauty rules: automatic template geometry is trusted and
+    /// only user-owned, unlocked layers are candidates for movement. This
+    /// avoids turning Book Check into a subjective auto-layout engine while
+    /// still catching the common "almost aligned" and uneven-spacing mistakes
+    /// created during direct manipulation.
+    func compositionIssues(on page: MemoryBookPage) -> [MemoryBookIssue] {
+        guard !page.isLocked else { return [] }
+        let visible = page.elements.filter { !$0.isHidden }
+        let movable = visible.filter { $0.origin == .user && !$0.isInteractionLocked }
+        var issues: [MemoryBookIssue] = []
+
+        for element in movable {
+            let normalizedRotation = ((element.rotationDegrees + 180).truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) - 180
+            if abs(normalizedRotation) > 20, element.kind != .shape {
+                issues.append(.init(
+                    severity: .suggestion,
+                    pageID: page.id,
+                    elementID: element.id,
+                    field: element.textField,
+                    message: String(format: "This %@ is rotated %.0f°. Straighten it for a calmer composition, or keep the angle intentionally.", element.kind == .text ? "text" : "photo", abs(normalizedRotation)),
+                    repair: .elementRotation(0)
+                ))
+            }
+
+            let frame = element.normalizedFrame
+            let xAnchors = [frame.minX, frame.midX, frame.maxX]
+            let yAnchors = [frame.minY, frame.midY, frame.maxY]
+            var best: (delta: CGFloat, axis: String)?
+            for peer in visible where peer.id != element.id && (element.groupID == nil || peer.groupID != element.groupID) {
+                let other = peer.normalizedFrame
+                let peerX = [other.minX, other.midX, other.maxX]
+                let peerY = [other.minY, other.midY, other.maxY]
+                for index in 0..<3 {
+                    let dx = peerX[index] - xAnchors[index]
+                    if abs(dx) >= 0.004, abs(dx) <= 0.018, best == nil || abs(dx) < abs(best!.delta) { best = (dx, "vertical") }
+                    let dy = peerY[index] - yAnchors[index]
+                    if abs(dy) >= 0.004, abs(dy) <= 0.018, best == nil || abs(dy) < abs(best!.delta) { best = (dy, "horizontal") }
+                }
+            }
+            if let best {
+                var aligned = frame
+                if best.axis == "vertical" {
+                    aligned.origin.x = min(1 - aligned.width, max(0, aligned.minX + best.delta))
+                } else {
+                    aligned.origin.y = min(1 - aligned.height, max(0, aligned.minY + best.delta))
+                }
+                issues.append(.init(
+                    severity: .suggestion,
+                    pageID: page.id,
+                    elementID: element.id,
+                    field: element.textField,
+                    message: "This layer is almost aligned with a nearby layer. Snap it onto the shared \(best.axis) guide for a cleaner edge.",
+                    repair: .elementFrames([.init(elementID: element.id, frame: aligned)])
+                ))
+            }
+        }
+
+        let protected = visible.filter { $0.origin == .user && $0.isInteractionLocked }
+        if let spacingIssue = spacingIssue(on: page, elements: movable, protectedElements: protected, horizontally: true) { issues.append(spacingIssue) }
+        if let spacingIssue = spacingIssue(on: page, elements: movable, protectedElements: protected, horizontally: false) { issues.append(spacingIssue) }
+        if let balanceIssue = whitespaceBalanceIssue(on: page, visibleElements: visible) { issues.append(balanceIssue) }
+        issues.append(contentsOf: captionRelationshipIssues(on: page, visibleElements: visible))
+        return issues
+    }
+
+    /// Only a fully user-authored, unlocked content group is eligible for an
+    /// automatic balance repair. Mixed template/user pages can be intentionally
+    /// asymmetric, so Book Check leaves them alone instead of second-guessing
+    /// the selected design system.
+    private func whitespaceBalanceIssue(on page: MemoryBookPage, visibleElements: [MemoryBookElement]) -> MemoryBookIssue? {
+        let content = visibleElements.filter {
+            ($0.kind == .image || ($0.kind == .text && !($0.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+        }
+        guard content.count >= 2,
+              content.allSatisfy({ $0.origin == .user && !$0.isInteractionLocked }) else { return nil }
+        let union = content.dropFirst().reduce(content[0].normalizedFrame) { $0.union($1.normalizedFrame) }
+        guard union.width * union.height < 0.58 else { return nil }
+        let rawDX = 0.5 - union.midX
+        let rawDY = 0.5 - union.midY
+        guard abs(rawDX) > 0.16 || abs(rawDY) > 0.16 else { return nil }
+        let dx = min(0.94 - union.maxX, max(0.06 - union.minX, rawDX))
+        let dy = min(0.94 - union.maxY, max(0.06 - union.minY, rawDY))
+        guard abs(dx) > 0.04 || abs(dy) > 0.04 else { return nil }
+        let repairs = content.map { element -> MemoryBookElementFrameRepair in
+            var frame = element.normalizedFrame
+            frame.origin.x += dx
+            frame.origin.y += dy
+            return .init(elementID: element.id, frame: frame)
+        }
+        let horizontal = rawDX > 0.16 ? "left" : rawDX < -0.16 ? "right" : nil
+        let vertical = rawDY > 0.16 ? "top" : rawDY < -0.16 ? "bottom" : nil
+        let direction = [horizontal, vertical].compactMap { $0 }.joined(separator: " and ")
+        return .init(
+            severity: .suggestion,
+            pageID: page.id,
+            elementID: content[0].id,
+            field: content[0].textField,
+            message: "The authored content is weighted toward the \(direction) edge, leaving accidental-looking whitespace. Rebalance the group while preserving its internal layout.",
+            repair: .recenterElementFrames(repairs)
+        )
+    }
+
+    private func captionRelationshipIssues(on page: MemoryBookPage, visibleElements: [MemoryBookElement]) -> [MemoryBookIssue] {
+        let photos = visibleElements.filter { $0.kind == .image }
+        return visibleElements.compactMap { caption in
+            guard caption.kind == .text,
+                  caption.textField == .photoCaption,
+                  caption.origin == .user,
+                  !(caption.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            guard !photos.isEmpty else {
+                return .init(
+                    severity: .suggestion,
+                    pageID: page.id,
+                    elementID: caption.id,
+                    field: caption.textField,
+                    message: "This caption has no photo on the page. Add a photo, convert it to a note, or remove the caption."
+                )
+            }
+            let distance = photos.map { photo -> CGFloat in
+                let dx = max(0, max(photo.normalizedFrame.minX - caption.normalizedFrame.maxX, caption.normalizedFrame.minX - photo.normalizedFrame.maxX))
+                let dy = max(0, max(photo.normalizedFrame.minY - caption.normalizedFrame.maxY, caption.normalizedFrame.minY - photo.normalizedFrame.maxY))
+                return hypot(dx, dy)
+            }.min() ?? 0
+            guard distance > 0.18 else { return nil }
+            return .init(
+                severity: .suggestion,
+                pageID: page.id,
+                elementID: caption.id,
+                field: caption.textField,
+                message: "This caption is visually detached from every photo. Move it closer to the image it describes."
+            )
+        }
+    }
+
+    private func spacingIssue(on page: MemoryBookPage, elements: [MemoryBookElement], protectedElements: [MemoryBookElement], horizontally: Bool) -> MemoryBookIssue? {
+        guard elements.count >= 3 else { return nil }
+        let sorted = elements.sorted {
+            horizontally ? $0.normalizedFrame.minX < $1.normalizedFrame.minX : $0.normalizedFrame.minY < $1.normalizedFrame.minY
+        }
+        let crossCenters = sorted.map { horizontally ? $0.normalizedFrame.midY : $0.normalizedFrame.midX }
+        guard (crossCenters.max() ?? 0) - (crossCenters.min() ?? 0) <= 0.045 else { return nil }
+        let rowCrossMin = (crossCenters.min() ?? 0) - 0.045
+        let rowCrossMax = (crossCenters.max() ?? 0) + 0.045
+        let rowMainMin = horizontally ? sorted[0].normalizedFrame.minX : sorted[0].normalizedFrame.minY
+        let rowMainMax = horizontally ? sorted[sorted.count - 1].normalizedFrame.maxX : sorted[sorted.count - 1].normalizedFrame.maxY
+        let containsProtectedLayer = protectedElements.contains { element in
+            let frame = element.normalizedFrame
+            let crossCenter = horizontally ? frame.midY : frame.midX
+            let mainMin = horizontally ? frame.minX : frame.minY
+            let mainMax = horizontally ? frame.maxX : frame.maxY
+            return crossCenter >= rowCrossMin && crossCenter <= rowCrossMax && mainMax >= rowMainMin && mainMin <= rowMainMax
+        }
+        guard !containsProtectedLayer else { return nil }
+        let gaps = zip(sorted, sorted.dropFirst()).map { lhs, rhs in
+            horizontally ? rhs.normalizedFrame.minX - lhs.normalizedFrame.maxX : rhs.normalizedFrame.minY - lhs.normalizedFrame.maxY
+        }
+        guard gaps.allSatisfy({ $0 > 0.005 }), let minimum = gaps.min(), let maximum = gaps.max(), maximum - minimum > 0.025 else { return nil }
+        let first = sorted[0].normalizedFrame
+        let last = sorted[sorted.count - 1].normalizedFrame
+        let occupied = sorted.reduce(CGFloat.zero) { $0 + (horizontally ? $1.normalizedFrame.width : $1.normalizedFrame.height) }
+        let span = horizontally ? last.maxX - first.minX : last.maxY - first.minY
+        let equalGap = max(0.005, (span - occupied) / CGFloat(sorted.count - 1))
+        var cursor = horizontally ? first.minX : first.minY
+        let repairs = sorted.map { element -> MemoryBookElementFrameRepair in
+            var frame = element.normalizedFrame
+            if horizontally { frame.origin.x = cursor; cursor += frame.width + equalGap }
+            else { frame.origin.y = cursor; cursor += frame.height + equalGap }
+            return .init(elementID: element.id, frame: frame)
+        }
+        return .init(
+            severity: .suggestion,
+            pageID: page.id,
+            elementID: sorted[1].id,
+            message: "These \(sorted.count) layers have uneven \(horizontally ? "horizontal" : "vertical") spacing. Distribute them evenly for a steadier rhythm.",
+            repair: .elementFrames(repairs)
+        )
+    }
+
+    @discardableResult
+    mutating func applyBookCheckRepair(_ issue: MemoryBookIssue) -> Bool {
+        guard let pageID = issue.pageID,
+              let pageIndex = pages.firstIndex(where: { $0.id == pageID }),
+              let repair = issue.repair else { return false }
+        switch repair {
+        case .elementFrames(let repairs), .recenterElementFrames(let repairs):
+            guard repairs.allSatisfy({ repair in pages[pageIndex].elements.contains(where: { $0.id == repair.elementID && !$0.isInteractionLocked }) }) else { return false }
+            for repair in repairs {
+                guard let index = pages[pageIndex].elements.firstIndex(where: { $0.id == repair.elementID }) else { continue }
+                pages[pageIndex].elements[index].normalizedFrame = repair.frame
+                pages[pageIndex].elements[index].isLayoutLocked = true
+                pages[pageIndex].elements[index].origin = .user
+                pages[pageIndex].elements[index].updatedAt = .now
+            }
+        case .elementRotation(let value):
+            guard let elementID = issue.elementID,
+                  let index = pages[pageIndex].elements.firstIndex(where: { $0.id == elementID && !$0.isInteractionLocked }) else { return false }
+            pages[pageIndex].elements[index].rotationDegrees = value
+            pages[pageIndex].elements[index].isLayoutLocked = true
+            pages[pageIndex].elements[index].origin = .user
+            pages[pageIndex].elements[index].updatedAt = .now
+        case .textColor(let value):
+            guard let elementID = issue.elementID,
+                  let index = pages[pageIndex].elements.firstIndex(where: { $0.id == elementID && $0.kind == .text && !$0.isInteractionLocked }) else { return false }
+            pages[pageIndex].elements[index].textCustomColor = value
+            pages[pageIndex].elements[index].origin = .user
+            pages[pageIndex].elements[index].updatedAt = .now
+        }
+        updatedAt = .now
+        return true
     }
 
     mutating func movePage(from source: Int, to destination: Int) {
@@ -1840,9 +2808,14 @@ extension MemoryBookDocument {
         var duplicate = pages[index]
         duplicate.id = UUID()
         duplicate.pageNumber = index + 2
+        var groupMap: [UUID: UUID] = [:]
         duplicate.elements = duplicate.elements.map { element in
             var copy = element
             copy.id = UUID()
+            if let groupID = copy.groupID {
+                copy.groupID = groupMap[groupID, default: UUID()]
+                groupMap[groupID] = copy.groupID
+            }
             copy.updatedAt = .now
             return copy
         }
@@ -1862,6 +2835,10 @@ extension MemoryBookDocument {
         var element = pages[pageIndex].elements[elementIndex]
         guard element.kind == .image else { return false }
         element.assetID = photoID
+        // Finishing values describe the source photograph, unlike the frame,
+        // mask and border which describe the composition slot.
+        element.imageAdjustments = .default
+        element.imageTransformAdjustments = .default
         if element.imageContentMode == .fit {
             element.cropScale = 1
             element.cropOffset = .zero
@@ -2010,7 +2987,12 @@ enum MemoryBookBuilder {
             // chapter remains printable instead of silently truncating at six.
             let chunks = stride(from: 0, to: photos.count, by: 6).map { Array(photos[$0..<min($0 + 6, photos.count)]) }
             for chunk in chunks {
-                let layout: MemoryBookLayout = chunk.count <= 1 ? .single : (chunk.count == 2 ? .diptych : .mosaic)
+                let layout: MemoryBookLayout = switch chunk.count {
+                case 0...1: .single
+                case 2: .diptych
+                case 4: .grid2x2
+                default: .grid3x2
+                }
                 append(.photoSelection, chapter.title, chapter.note.isEmpty ? "Selected moments from \(chapter.dateLabel)." : chapter.note, chapter: chapter, photos: chunk, layout: layout)
             }
         }
@@ -2019,7 +3001,9 @@ enum MemoryBookBuilder {
             append(.milestone, "A year we remember", "A quiet marker from \(arrivalYear).", photos: [milestone], layout: .single)
         }
         append(.closing, "Kept with care.", "Tailor never changes your original photos.")
-        return MemoryBookDocument(profile: profile, photos: photos, chapters: visible, pages: pages, style: style, pageSize: pageSize)
+        var document = MemoryBookDocument(profile: profile, photos: photos, chapters: visible, pages: pages, style: style, pageSize: pageSize)
+        document.applyAutomaticFocalCrops()
+        return document
     }
 }
 
@@ -2100,6 +3084,7 @@ enum ScanArchiveMergePolicy {
                 merged.sensitivityState = preserved.sensitivityState
                 merged.excludedReason = preserved.excludedReason
                 merged.visualHash = candidate.visualHash ?? preserved.visualHash
+                merged.subjectRegion = candidate.subjectRegion ?? preserved.subjectRegion
                 result[index] = merged
             } else if knownIdentifiers.insert(candidate.assetLocalIdentifier).inserted {
                 result.append(candidate)

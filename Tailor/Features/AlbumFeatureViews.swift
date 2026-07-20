@@ -7,6 +7,12 @@ private struct TextDraftHighlight: Equatable {
     let isInvalid: Bool
 }
 
+private struct ElementAppearanceTarget: Identifiable {
+    var id: UUID { elementID }
+    let pageID: UUID
+    let elementID: UUID
+}
+
 /// The product editor. This is intentionally distinct from reading preview: its
 /// canvas edits the persisted MemoryBookDocument rather than a temporary view model.
 struct AlbumEditorFeatureView: View {
@@ -19,12 +25,17 @@ struct AlbumEditorFeatureView: View {
 
     @State private var selectedPageID: UUID?
     @State private var selectedElementID: UUID?
+    @State private var selectedElementIDs: Set<UUID> = []
+    @State private var multiSelectEnabled = false
+    @State private var editorClipboard: [MemoryBookElement] = []
     @State private var textEditorTarget: TextEditorTarget?
     @State private var panel: EditorPanel = .pages
     @State private var showPageManager = false
     @State private var showPhotoPicker = false
     @State private var showStylePicker = false
     @State private var showLayoutPicker = false
+    @State private var showLayers = false
+    @State private var appearanceTarget: ElementAppearanceTarget?
     @State private var cropTarget: CropTarget?
     @State private var layoutChange: LayoutChangeTarget?
     @State private var layoutUnavailableMessage: String?
@@ -34,6 +45,7 @@ struct AlbumEditorFeatureView: View {
     @State private var undoStack: [MemoryBookDocument] = []
     @State private var redoStack: [MemoryBookDocument] = []
     @State private var textDraftHighlight: TextDraftHighlight?
+    @State private var canvasZoom: CGFloat = 1
     @StateObject private var photoAvailability = PhotoAssetAvailabilityMonitor()
 
     init(memoryBook: Binding<MemoryBookDocument?>, purchased: Bool, back: @escaping () -> Void, preview: @escaping () -> Void, export: @escaping () -> Void, persist: @escaping () -> Void) {
@@ -96,15 +108,48 @@ struct AlbumEditorFeatureView: View {
                 else { selectedPageID = memoryBook?.pages.first?.id }
             }
         }
+        .onChange(of: selectedPageID) { _, _ in
+            canvasZoom = 1
+            selectedElementID = nil
+            selectedElementIDs.removeAll()
+            multiSelectEnabled = false
+        }
         .sheet(isPresented: $showPageManager) { PageManagerSheet(book: documentBinding, selectedPageID: $selectedPageID, recordHistory: recordHistory, commit: commit) }
         .sheet(isPresented: $showPhotoPicker) { PhotoPickerSheet(book: documentBinding, selectedPageID: selectedPageID, selectedElementID: selectedElementID, requestCrop: { pageID, elementID in cropTarget = CropTarget(pageID: pageID, elementID: elementID) }, recordHistory: recordHistory, commit: commit) }
         .sheet(item: $textEditorTarget, onDismiss: { textDraftHighlight = nil }) { target in TextEditorSheet(book: documentBinding, selectedPageID: target.pageID, selectedElementID: target.elementID, initialField: target.field, draftHighlight: $textDraftHighlight, recordHistory: recordHistory, commit: commit) }
         .sheet(isPresented: $showStylePicker) { StylePickerSheet(book: documentBinding, selectedPageID: selectedPageID, recordHistory: recordHistory, commit: commit) }
         .sheet(isPresented: $showLayoutPicker) { LayoutPickerSheet(book: documentBinding, selectedPageID: selectedPageID, choose: { layout in layoutChange = LayoutChangeTarget(pageID: selectedPageID ?? UUID(), layout: layout) }) }
+        .sheet(isPresented: $showLayers) {
+            ElementLayersSheet(
+                book: documentBinding,
+                pageID: selectedPageID,
+                selectedElementID: $selectedElementID,
+                selectedElementIDs: $selectedElementIDs,
+                recordHistory: recordHistory,
+                commit: commit
+            )
+        }
+        .sheet(item: $appearanceTarget) { target in
+            PhotoAppearanceEditorSheet(
+                book: documentBinding,
+                pageID: target.pageID,
+                elementID: target.elementID,
+                recordHistory: recordHistory,
+                commit: commit
+            )
+        }
         // Read through the live binding when the sheet appears. Capturing the
         // value from the header can otherwise show an old Book Check result
         // after an editor mutation and before SwiftUI has rebuilt that header.
-        .sheet(isPresented: $showIssues, onDismiss: presentPendingBookCheckIssue) { BookCheckSheet(book: documentBinding, assetIsAvailable: PhotoAssetAvailability.isAvailable, selectIssue: openBookCheckIssue) }
+        .sheet(isPresented: $showIssues, onDismiss: presentPendingBookCheckIssue) {
+            BookCheckSheet(
+                book: documentBinding,
+                assetIsAvailable: PhotoAssetAvailability.isAvailable,
+                selectIssue: openBookCheckIssue,
+                recordHistory: recordHistory,
+                commit: commit
+            )
+        }
         .confirmationDialog("Auto arrange", isPresented: Binding(get: { autoArrangeScope != nil }, set: { if !$0 { autoArrangeScope = nil } })) {
             Button("Arrange unlocked pages") { performAutoArrange() }
             Button("Cancel", role: .cancel) { autoArrangeScope = nil }
@@ -135,17 +180,383 @@ struct AlbumEditorFeatureView: View {
             Color(red: 0.07, green: 0.16, blue: 0.13).ignoresSafeArea()
             VStack(spacing: 0) {
                 editorHeader(book: book, page: page)
-                Spacer(minLength: 12)
-                EditorBookPageCanvas(page: pageBinding(pageIndex), document: book, selectedElementID: $selectedElementID, textDraftHighlight: $textDraftHighlight, editing: true, watermarked: usesSafetyFixtureWatermark, isPhotoAvailable: PhotoAssetAvailability.isAvailable, replaceMissingPhoto: { elementID in
-                    selectedElementID = elementID
-                    showPhotoPicker = true
-                }, beginEdit: recordHistory, endEdit: commit)
-                    .aspectRatio(book.pageSize == .a4 ? 595 / 842 : 612 / 792, contentMode: .fit)
-                    .padding(.horizontal, 28)
-                Spacer(minLength: 12)
+                editorCanvasViewport(book: book, pageIndex: pageIndex, watermarked: usesSafetyFixtureWatermark)
+                    .padding(.top, 8)
+                canvasPrecisionBar(page: page)
                 ThumbnailRail(pages: book.pages, selectedPageID: $selectedPageID)
                 editorToolbar(page: page)
             }
+        }
+    }
+
+    private func editorCanvasViewport(book: MemoryBookDocument, pageIndex: Int, watermarked: Bool) -> some View {
+        GeometryReader { proxy in
+            let aspect: CGFloat = book.pageSize == .a4 ? 595 / 842 : 612 / 792
+            let fittedWidth = min(max(1, proxy.size.width - 56), max(1, proxy.size.height - 20) * aspect)
+            let fittedHeight = fittedWidth / aspect
+            ScrollView([.horizontal, .vertical], showsIndicators: canvasZoom > 1.01) {
+                EditorBookPageCanvas(
+                    page: pageBinding(pageIndex),
+                    document: book,
+                    selectedElementID: $selectedElementID,
+                    selectedElementIDs: $selectedElementIDs,
+                    multiSelectEnabled: multiSelectEnabled,
+                    textDraftHighlight: $textDraftHighlight,
+                    editing: true,
+                    watermarked: watermarked,
+                    isPhotoAvailable: PhotoAssetAvailability.isAvailable,
+                    replaceMissingPhoto: { elementID in
+                        selectedElementID = elementID
+                        showPhotoPicker = true
+                    },
+                    beginEdit: recordHistory,
+                    endEdit: commit
+                )
+                .frame(width: fittedWidth * canvasZoom, height: fittedHeight * canvasZoom)
+                .frame(minWidth: proxy.size.width, minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .accessibilityIdentifier("Editor canvas viewport")
+    }
+
+    private func canvasPrecisionBar(page: MemoryBookPage) -> some View {
+        HStack(spacing: 14) {
+            Button { setCanvasZoom(canvasZoom - 0.25) } label: { Image(systemName: "minus.magnifyingglass") }
+                .disabled(canvasZoom <= 1)
+                .accessibilityLabel("Zoom out canvas")
+            Button { setCanvasZoom(1) } label: {
+                Text(canvasZoom == 1 ? "FIT" : "\(Int((canvasZoom * 100).rounded()))%")
+                    .font(.caption2.weight(.bold))
+                    .frame(minWidth: 44)
+            }
+            .accessibilityLabel("Fit canvas")
+            .accessibilityValue("\(Int((canvasZoom * 100).rounded())) percent")
+            Button { setCanvasZoom(canvasZoom + 0.25) } label: { Image(systemName: "plus.magnifyingglass") }
+                .disabled(canvasZoom >= 3)
+                .accessibilityLabel("Zoom in canvas")
+            Spacer()
+            Label("Snap", systemImage: "ruler")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.72))
+            Button {
+                multiSelectEnabled.toggle()
+                if multiSelectEnabled, let selectedElementID { selectedElementIDs.insert(selectedElementID) }
+            } label: {
+                Image(systemName: multiSelectEnabled ? "checkmark.circle.fill" : "checkmark.circle")
+            }
+            .accessibilityLabel(multiSelectEnabled ? "Finish multiple selection" : "Select multiple elements")
+            if selectedElementIDs.intersection(Set(page.elements.map(\.id))).count > 1 {
+                multiSelectionMenu(pageID: page.id, page: page)
+            } else if let selectedElementID,
+               let element = page.elements.first(where: { $0.id == selectedElementID }) {
+                selectedElementMenu(pageID: page.id, element: element)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 24)
+        .frame(height: 38)
+    }
+
+    private func multiSelectionMenu(pageID: UUID, page: MemoryBookPage) -> some View {
+        let ids = selectedElementIDs.intersection(Set(page.elements.map(\.id)))
+        let elements = page.elements.filter { ids.contains($0.id) }
+        let grouped = elements.count > 1 && Set(elements.compactMap(\.groupID)).count == 1 && elements.allSatisfy { $0.groupID != nil }
+        let containsLocked = elements.contains(where: \.isInteractionLocked)
+        return Menu {
+            Button(grouped ? "Ungroup selected" : "Group selected") {
+                setSelectedElementsGrouped(pageID: pageID, grouped: !grouped)
+            }
+            Button(containsLocked ? "Unlock selected" : "Lock selected") {
+                setSelectedElementsLock(pageID: pageID, locked: !containsLocked)
+            }
+            Button("Copy selected") { copySelectedElements(pageID: pageID) }
+            Divider()
+            Menu("Align selected") {
+                Button("Align selected left") { alignSelectedElements(pageID: pageID, alignment: .left) }
+                Button("Align selected horizontal center") { alignSelectedElements(pageID: pageID, alignment: .horizontalCenter) }
+                Button("Align selected right") { alignSelectedElements(pageID: pageID, alignment: .right) }
+                Button("Align selected top") { alignSelectedElements(pageID: pageID, alignment: .top) }
+                Button("Align selected vertical center") { alignSelectedElements(pageID: pageID, alignment: .verticalCenter) }
+                Button("Align selected bottom") { alignSelectedElements(pageID: pageID, alignment: .bottom) }
+            }
+            .disabled(containsLocked)
+            Button("Distribute horizontally") { distributeSelectedElements(pageID: pageID, horizontally: true) }
+                .disabled(elements.count < 3 || containsLocked)
+            Button("Distribute vertically") { distributeSelectedElements(pageID: pageID, horizontally: false) }
+                .disabled(elements.count < 3 || containsLocked)
+        } label: {
+            Label("\(elements.count)", systemImage: grouped ? "square.3.layers.3d" : "square.on.square")
+                .font(.caption2.weight(.bold))
+        }
+        .accessibilityLabel("Arrange \(elements.count) selected elements")
+    }
+
+    private func selectedElementMenu(pageID: UUID, element: MemoryBookElement) -> some View {
+        Menu {
+            Button(element.isInteractionLocked ? "Unlock element" : "Lock element") {
+                setSelectedElementLock(pageID: pageID, locked: !element.isInteractionLocked)
+            }
+            Button("Duplicate element") { duplicateSelectedElement(pageID: pageID) }
+                .disabled(element.kind == .text)
+            Button("Copy element") { copySelectedElements(pageID: pageID) }
+            if element.kind == .shape {
+                Button("Edit shape appearance", systemImage: "paintbrush") {
+                    appearanceTarget = ElementAppearanceTarget(pageID: pageID, elementID: element.id)
+                }
+            }
+            Divider()
+            Menu("Align") {
+                Button("Align left") { alignSelectedElement(pageID: pageID, alignment: .left) }
+                Button("Align horizontal center") { alignSelectedElement(pageID: pageID, alignment: .horizontalCenter) }
+                Button("Align right") { alignSelectedElement(pageID: pageID, alignment: .right) }
+                Button("Align top") { alignSelectedElement(pageID: pageID, alignment: .top) }
+                Button("Align vertical center") { alignSelectedElement(pageID: pageID, alignment: .verticalCenter) }
+                Button("Align bottom") { alignSelectedElement(pageID: pageID, alignment: .bottom) }
+            }
+            .disabled(element.isInteractionLocked)
+            Menu("Layer") {
+                Button("Bring forward") { layerSelectedElement(pageID: pageID, move: .forward) }
+                Button("Send backward") { layerSelectedElement(pageID: pageID, move: .backward) }
+                Button("Bring to front") { layerSelectedElement(pageID: pageID, move: .front) }
+                Button("Send to back") { layerSelectedElement(pageID: pageID, move: .back) }
+            }
+            .disabled(element.isInteractionLocked)
+        } label: {
+            Label("Arrange", systemImage: element.isInteractionLocked ? "lock.fill" : "square.3.layers.3d")
+                .font(.caption2.weight(.bold))
+        }
+        .accessibilityLabel("Arrange selected element")
+    }
+
+    private enum ElementAlignment { case left, horizontalCenter, right, top, verticalCenter, bottom }
+    private enum ElementLayerMove { case forward, backward, front, back }
+
+    private func copySelectedElements(pageID: UUID) {
+        guard let book = memoryBook,
+              let page = book.pages.first(where: { $0.id == pageID }) else { return }
+        let ids = selectedElementIDs.isEmpty ? Set(selectedElementID.map { [$0] } ?? []) : selectedElementIDs
+        editorClipboard = page.elements.filter { ids.contains($0.id) }
+    }
+
+    private func pasteCopiedElements(pageID: UUID) {
+        guard !editorClipboard.isEmpty, let book = memoryBook,
+              let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }),
+              !book.pages[pageIndex].isLocked else { return }
+        recordHistory()
+        mutate { book in
+            guard let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }) else { return }
+            var groupMap: [UUID: UUID] = [:]
+            var nextZ = (book.pages[pageIndex].elements.map(\.zIndex).max() ?? 0) + 1
+            var existingFields = Set(book.pages[pageIndex].elements.compactMap(\.textField))
+            var pastedIDs: Set<UUID> = []
+            for source in editorClipboard {
+                var copy = source
+                copy.id = UUID()
+                if let groupID = source.groupID {
+                    if groupMap[groupID] == nil { groupMap[groupID] = UUID() }
+                    copy.groupID = groupMap[groupID]
+                }
+                if copy.kind == .text, let field = copy.textField {
+                    if existingFields.contains(field) { copy.textField = nil } else { existingFields.insert(field) }
+                }
+                copy.isInteractionLocked = false
+                copy.isLayoutLocked = true
+                copy.origin = .user
+                copy.zIndex = nextZ; nextZ += 1
+                copy.normalizedFrame.origin.x = min(1 - copy.normalizedFrame.width, max(0, copy.normalizedFrame.minX + 0.025))
+                copy.normalizedFrame.origin.y = min(1 - copy.normalizedFrame.height, max(0, copy.normalizedFrame.minY + 0.025))
+                copy.updatedAt = .now
+                book.pages[pageIndex].elements.append(copy)
+                if let assetID = copy.assetID, !book.pages[pageIndex].photoIDs.contains(assetID) { book.pages[pageIndex].photoIDs.append(assetID) }
+                pastedIDs.insert(copy.id)
+            }
+            selectedElementIDs = pastedIDs
+            selectedElementID = pastedIDs.first
+            multiSelectEnabled = pastedIDs.count > 1
+        }
+    }
+
+    private func selectedElementIndexes(pageID: UUID, in book: MemoryBookDocument) -> (Int, [Int])? {
+        guard let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }) else { return nil }
+        let indexes = book.pages[pageIndex].elements.indices.filter { selectedElementIDs.contains(book.pages[pageIndex].elements[$0].id) }
+        return indexes.count > 1 ? (pageIndex, Array(indexes)) : nil
+    }
+
+    private func setSelectedElementsGrouped(pageID: UUID, grouped: Bool) {
+        guard let book = memoryBook, selectedElementIndexes(pageID: pageID, in: book) != nil else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book) else { return }
+            let groupID = grouped ? UUID() : nil
+            for index in indexes { book.pages[pageIndex].elements[index].groupID = groupID; book.pages[pageIndex].elements[index].updatedAt = .now }
+        }
+    }
+
+    private func setSelectedElementsLock(pageID: UUID, locked: Bool) {
+        guard let book = memoryBook, selectedElementIndexes(pageID: pageID, in: book) != nil else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book) else { return }
+            for index in indexes {
+                book.pages[pageIndex].elements[index].isInteractionLocked = locked
+                book.pages[pageIndex].elements[index].origin = .user
+                book.pages[pageIndex].elements[index].updatedAt = .now
+            }
+        }
+    }
+
+    private func alignSelectedElements(pageID: UUID, alignment: ElementAlignment) {
+        guard let book = memoryBook,
+              let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book),
+              indexes.allSatisfy({ !book.pages[pageIndex].elements[$0].isInteractionLocked }) else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book) else { return }
+            let frames = indexes.map { book.pages[pageIndex].elements[$0].normalizedFrame }
+            guard let first = frames.first else { return }
+            let bounds = frames.dropFirst().reduce(first) { $0.union($1) }
+            for index in indexes {
+                var frame = book.pages[pageIndex].elements[index].normalizedFrame
+                switch alignment {
+                case .left: frame.origin.x = bounds.minX
+                case .horizontalCenter: frame.origin.x = bounds.midX - frame.width / 2
+                case .right: frame.origin.x = bounds.maxX - frame.width
+                case .top: frame.origin.y = bounds.minY
+                case .verticalCenter: frame.origin.y = bounds.midY - frame.height / 2
+                case .bottom: frame.origin.y = bounds.maxY - frame.height
+                }
+                book.pages[pageIndex].elements[index].normalizedFrame = frame
+                book.pages[pageIndex].elements[index].isLayoutLocked = true
+                book.pages[pageIndex].elements[index].origin = .user
+                book.pages[pageIndex].elements[index].updatedAt = .now
+            }
+        }
+    }
+
+    private func distributeSelectedElements(pageID: UUID, horizontally: Bool) {
+        guard let book = memoryBook,
+              let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book), indexes.count >= 3,
+              indexes.allSatisfy({ !book.pages[pageIndex].elements[$0].isInteractionLocked }) else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, indexes) = selectedElementIndexes(pageID: pageID, in: book) else { return }
+            let sorted = indexes.sorted {
+                let lhs = book.pages[pageIndex].elements[$0].normalizedFrame
+                let rhs = book.pages[pageIndex].elements[$1].normalizedFrame
+                return horizontally ? lhs.minX < rhs.minX : lhs.minY < rhs.minY
+            }
+            let frames = sorted.map { book.pages[pageIndex].elements[$0].normalizedFrame }
+            guard let first = frames.first, let last = frames.last else { return }
+            let span = horizontally ? last.maxX - first.minX : last.maxY - first.minY
+            let occupied = frames.reduce(CGFloat.zero) { $0 + (horizontally ? $1.width : $1.height) }
+            let gap = max(0, (span - occupied) / CGFloat(frames.count - 1))
+            var cursor = horizontally ? first.minX : first.minY
+            for (offset, index) in sorted.enumerated() {
+                var frame = book.pages[pageIndex].elements[index].normalizedFrame
+                if offset > 0 && offset < sorted.count - 1 {
+                    if horizontally { frame.origin.x = cursor } else { frame.origin.y = cursor }
+                    book.pages[pageIndex].elements[index].normalizedFrame = frame
+                }
+                cursor += (horizontally ? frame.width : frame.height) + gap
+                book.pages[pageIndex].elements[index].isLayoutLocked = true
+                book.pages[pageIndex].elements[index].origin = .user
+                book.pages[pageIndex].elements[index].updatedAt = .now
+            }
+        }
+    }
+
+    private func selectedElementLocation(pageID: UUID, in book: MemoryBookDocument) -> (Int, Int)? {
+        guard let selectedElementID,
+              let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }),
+              let elementIndex = book.pages[pageIndex].elements.firstIndex(where: { $0.id == selectedElementID }) else { return nil }
+        return (pageIndex, elementIndex)
+    }
+
+    private func setSelectedElementLock(pageID: UUID, locked: Bool) {
+        guard let book = memoryBook, selectedElementLocation(pageID: pageID, in: book) != nil else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book) else { return }
+            book.pages[pageIndex].elements[elementIndex].isInteractionLocked = locked
+            book.pages[pageIndex].elements[elementIndex].origin = .user
+        }
+    }
+
+    private func duplicateSelectedElement(pageID: UUID) {
+        guard let book = memoryBook, selectedElementLocation(pageID: pageID, in: book) != nil else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book) else { return }
+            var duplicate = book.pages[pageIndex].elements[elementIndex]
+            duplicate.id = UUID()
+            duplicate.textField = duplicate.kind == .text ? nil : duplicate.textField
+            duplicate.isInteractionLocked = false
+            duplicate.groupID = nil
+            duplicate.isLayoutLocked = true
+            duplicate.origin = .user
+            duplicate.zIndex = (book.pages[pageIndex].elements.map(\.zIndex).max() ?? 0) + 1
+            duplicate.normalizedFrame.origin.x = min(1 - duplicate.normalizedFrame.width, max(0, duplicate.normalizedFrame.origin.x + 0.025))
+            duplicate.normalizedFrame.origin.y = min(1 - duplicate.normalizedFrame.height, max(0, duplicate.normalizedFrame.origin.y + 0.025))
+            duplicate.updatedAt = .now
+            book.pages[pageIndex].elements.append(duplicate)
+            selectedElementID = duplicate.id
+            selectedElementIDs = [duplicate.id]
+        }
+    }
+
+    private func alignSelectedElement(pageID: UUID, alignment: ElementAlignment) {
+        guard let book = memoryBook,
+              let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book),
+              !book.pages[pageIndex].elements[elementIndex].isInteractionLocked else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book) else { return }
+            var element = book.pages[pageIndex].elements[elementIndex]
+            let inset = element.kind == .text ? MemoryBookPageRenderPlan.safeInsetRatio : 0
+            switch alignment {
+            case .left: element.normalizedFrame.origin.x = inset
+            case .horizontalCenter: element.normalizedFrame.origin.x = (1 - element.normalizedFrame.width) / 2
+            case .right: element.normalizedFrame.origin.x = 1 - inset - element.normalizedFrame.width
+            case .top: element.normalizedFrame.origin.y = inset
+            case .verticalCenter: element.normalizedFrame.origin.y = (1 - element.normalizedFrame.height) / 2
+            case .bottom: element.normalizedFrame.origin.y = 1 - inset - element.normalizedFrame.height
+            }
+            element.isLayoutLocked = true; element.origin = .user; element.updatedAt = .now
+            book.pages[pageIndex].elements[elementIndex] = element
+        }
+    }
+
+    private func layerSelectedElement(pageID: UUID, move: ElementLayerMove) {
+        guard let book = memoryBook,
+              let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book),
+              !book.pages[pageIndex].elements[elementIndex].isInteractionLocked else { return }
+        recordHistory()
+        mutate { book in
+            guard let (pageIndex, elementIndex) = selectedElementLocation(pageID: pageID, in: book) else { return }
+            let elements = book.pages[pageIndex].elements
+            let current = elements[elementIndex]
+            let ordered = elements.sorted { $0.zIndex == $1.zIndex ? $0.id.uuidString < $1.id.uuidString : $0.zIndex < $1.zIndex }
+            guard let orderedIndex = ordered.firstIndex(where: { $0.id == current.id }) else { return }
+            switch move {
+            case .forward where orderedIndex < ordered.count - 1:
+                book.pages[pageIndex].elements[elementIndex].zIndex = ordered[orderedIndex + 1].zIndex + 1
+            case .backward where orderedIndex > 0:
+                book.pages[pageIndex].elements[elementIndex].zIndex = ordered[orderedIndex - 1].zIndex - 1
+            case .front:
+                book.pages[pageIndex].elements[elementIndex].zIndex = (elements.map(\.zIndex).max() ?? 0) + 1
+            case .back:
+                book.pages[pageIndex].elements[elementIndex].zIndex = (elements.map(\.zIndex).min() ?? 0) - 1
+            default: return
+            }
+            book.pages[pageIndex].elements[elementIndex].origin = .user
+            book.pages[pageIndex].elements[elementIndex].updatedAt = .now
+        }
+    }
+
+    private func setCanvasZoom(_ proposed: CGFloat) {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            canvasZoom = min(3, max(1, proposed))
         }
     }
 
@@ -164,6 +575,13 @@ struct AlbumEditorFeatureView: View {
                     Button("Entire book") { autoArrangeScope = .book }
                 }
                 Button("Check book") { showIssues = true }
+                Button("Layers") { showLayers = true }
+                if !page.isLocked {
+                    Button("Add decoration", systemImage: "square.on.circle") { addDecoration(pageID: page.id) }
+                }
+                if !editorClipboard.isEmpty, !page.isLocked {
+                    Button("Paste copied elements") { pasteCopiedElements(pageID: page.id) }
+                }
                 Button("Reading preview", action: preview)
                 Button("Export PDF") {
                     let blockers = book.checkBook(assetIsAvailable: PhotoAssetAvailability.isAvailable).filter { $0.severity == .blocking }
@@ -173,6 +591,39 @@ struct AlbumEditorFeatureView: View {
                 .accessibilityLabel("More editor actions")
         }
         .font(.title3.weight(.semibold)).foregroundStyle(.white).padding(.horizontal, 20).padding(.vertical, 14)
+    }
+
+    private func addDecoration(pageID: UUID) {
+        guard var book = memoryBook,
+              let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }),
+              !book.pages[pageIndex].isLocked else { return }
+        recordHistory()
+        var appearance = MemoryBookElementAppearance.default
+        appearance.mask = .roundedRectangle
+        appearance.cornerRadiusRatio = 18 / 612
+        appearance.fillColor = book.pages[pageIndex].styleOverride.map(MemoryBookPageStyle.resolve)?.accent ?? MemoryBookPageStyle.resolve(book.style).accent
+        appearance.opacity = 0.88
+        appearance.shadowOpacity = 0.12
+        appearance.shadowBlurRatio = 8 / 612
+        let topLayer = (book.pages[pageIndex].elements.map(\.zIndex).max() ?? 0) + 1
+        let element = MemoryBookElement(
+            kind: .shape,
+            // Start as a restrained accent in the lower-right whitespace.
+            // Users can freely resize it, but the first result should not
+            // obscure the page's primary photos or title.
+            normalizedFrame: CGRect(x: 0.62, y: 0.76, width: 0.22, height: 0.08),
+            zIndex: topLayer,
+            isLayoutLocked: true,
+            appearance: appearance,
+            origin: .user
+        )
+        book.pages[pageIndex].elements.append(element)
+        book.updatedAt = .now
+        memoryBook = book
+        selectedElementID = element.id
+        selectedElementIDs = [element.id]
+        commit()
+        appearanceTarget = ElementAppearanceTarget(pageID: pageID, elementID: element.id)
     }
 
     private func editorToolbar(page: MemoryBookPage) -> some View {
@@ -244,7 +695,6 @@ struct AlbumEditorFeatureView: View {
 
     private func openBookCheckIssue(_ issue: MemoryBookIssue) {
         if let pageID = issue.pageID { selectedPageID = pageID }
-        selectedElementID = issue.elementID
         pendingBookCheckIssue = issue
         showIssues = false
     }
@@ -252,12 +702,20 @@ struct AlbumEditorFeatureView: View {
     private func presentPendingBookCheckIssue() {
         guard let issue = pendingBookCheckIssue else { return }
         pendingBookCheckIssue = nil
-        // A text blocker must land in its actual semantic field, not merely on
-        // the page that contains it.  Waiting for Book Check's dismissal also
-        // lets SwiftUI propagate the new page/element binding before the text
-        // sheet reads it; one run-loop hop was not sufficient on device.
-        guard issue.field != nil, issue.elementID != nil else { return }
-        DispatchQueue.main.async { textEditorTarget = TextEditorTarget(pageID: issue.pageID, elementID: issue.elementID, field: issue.field) }
+        // Finish the page change before selecting the target element. The
+        // editor's page-change handler deliberately clears selection; setting
+        // both synchronously made it erase Book Check's element and caused the
+        // Photo panel to fall back to the first image on the page.
+        DispatchQueue.main.async {
+            selectedElementID = issue.elementID
+            // A text blocker must then land in its actual semantic field, not
+            // merely on the page. Give the selection binding one further turn
+            // before the text sheet reads it.
+            guard issue.field != nil, issue.elementID != nil else { return }
+            DispatchQueue.main.async {
+                textEditorTarget = TextEditorTarget(pageID: issue.pageID, elementID: issue.elementID, field: issue.field)
+            }
+        }
     }
 
     private var autoArrangeMessage: String {
@@ -307,6 +765,8 @@ private struct EditorBookPageCanvas: View {
     @Binding var page: MemoryBookPage
     let document: MemoryBookDocument
     @Binding var selectedElementID: UUID?
+    var selectedElementIDs: Binding<Set<UUID>> = .constant([])
+    var multiSelectEnabled: Bool = false
     @Binding var textDraftHighlight: TextDraftHighlight?
     let editing: Bool
     let watermarked: Bool
@@ -316,8 +776,11 @@ private struct EditorBookPageCanvas: View {
     let endEdit: () -> Void
     @State private var startFrame: CGRect?
     @State private var startImageFrame: CGRect?
+    @State private var startResizeFrame: CGRect?
+    @State private var startGroupFrames: [UUID: CGRect] = [:]
     @State private var startRotation: Double?
     @State private var textRotationStartAngle: Double?
+    @State private var snapGuides: MemoryBookEditorSnapGuides = .none
 
     private var canvasCoordinateSpace: String { "MemoryBookPageCanvas-\(page.id.uuidString)" }
     var body: some View {
@@ -326,9 +789,17 @@ private struct EditorBookPageCanvas: View {
                 let plan = MemoryBookPageRenderPlan(page: page, document: document, pageSize: proxy.size, watermarked: watermarked)
                 RoundedRectangle(cornerRadius: 5).fill(color(plan.style.backdrop))
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(color(plan.style.paper))
+                    .fill(color(plan.paperColor))
                     .frame(width: plan.paperRect.width, height: plan.paperRect.height)
                     .position(x: plan.paperRect.midX, y: plan.paperRect.midY)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("Page paper")
+                    .accessibilityValue(memoryBookColorMarker(plan.paperColor))
+                    .onTapGesture {
+                        guard editing else { return }
+                        selectedElementID = nil
+                        selectedElementIDs.wrappedValue.removeAll()
+                    }
                 // Texture is a PageStyle contract, not an editor-only
                 // embellishment.  The reader uses this same canvas and the
                 // PDF renderer reads the same descriptor below.
@@ -345,6 +816,8 @@ private struct EditorBookPageCanvas: View {
                 ForEach(plan.orderedElements) { element in
                     elementView(element, plan: plan)
                 }
+                selectionControls(plan)
+                snapGuideOverlay(plan)
                 if let frame = plan.filmFrameRect(),
                    let lineWidth = plan.filmFrameLineWidth(),
                    let dash = plan.filmFrameDash(),
@@ -372,6 +845,115 @@ private struct EditorBookPageCanvas: View {
         }
     }
 
+    @ViewBuilder private func selectionControls(_ plan: MemoryBookPageRenderPlan) -> some View {
+        let selected = page.elements.filter { activeSelectionIDs.contains($0.id) }
+        if editing, selected.count > 1 {
+            let normalizedBounds = selected.dropFirst().reduce(selected[0].normalizedFrame) { $0.union($1.normalizedFrame) }
+            let frame = plan.rect(for: normalizedBounds)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(TailorColor.clay.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(TailorColor.clay, style: StrokeStyle(lineWidth: 2, dash: [6, 4])))
+                .frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY)
+                .contentShape(Rectangle())
+                .gesture(groupDragGesture(selected, plan: plan))
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("Multi-selection bounds")
+                .accessibilityLabel("\(selected.count) selected elements")
+                .accessibilityValue(memoryBookNormalizedFrameMarker(normalizedBounds))
+                .accessibilityHint("Drag to move the selected elements together.")
+            Text("\(selected.count) SELECTED")
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.5)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(TailorColor.clay)
+                .clipShape(Capsule())
+                .position(x: frame.minX + 36, y: max(plan.paperRect.minY + 12, frame.minY - 12))
+                .allowsHitTesting(false)
+        } else if editing, let element = selected.first ?? selectedElementID.flatMap({ id in page.elements.first(where: { $0.id == id }) }) {
+            let frame = plan.rect(for: element.normalizedFrame)
+            if element.isInteractionLocked {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(TailorColor.clay))
+                    .position(x: frame.maxX + 14, y: frame.minY - 14)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("Locked element indicator")
+                    .accessibilityLabel("Selected element is locked")
+            } else if element.kind != .image {
+                TextRotationHandle()
+                    .position(x: frame.maxX + 14, y: frame.minY - 14)
+                    .gesture(textRotationHandleGesture(element, frame: frame))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("Text rotation handle")
+                    .accessibilityLabel(element.kind == .shape ? "Rotate selected decoration" : "Rotate selected text")
+                    .accessibilityHint("Drag around the element to rotate it.")
+            }
+            if !element.isInteractionLocked {
+                ElementResizeHandle()
+                    .position(x: frame.maxX + 14, y: frame.maxY + 14)
+                    .gesture(resizeHandleGesture(element, plan: plan))
+                    .accessibilityElement(children: .ignore)
+            }
+        }
+    }
+
+    private var activeSelectionIDs: Set<UUID> {
+        if !selectedElementIDs.wrappedValue.isEmpty { return selectedElementIDs.wrappedValue }
+        return selectedElementID.map { [$0] } ?? []
+    }
+
+    private func select(_ element: MemoryBookElement) {
+        guard editing else { return }
+        if multiSelectEnabled {
+            if selectedElementIDs.wrappedValue.contains(element.id) {
+                selectedElementIDs.wrappedValue.remove(element.id)
+                if selectedElementID == element.id { selectedElementID = selectedElementIDs.wrappedValue.first }
+            } else {
+                selectedElementIDs.wrappedValue.insert(element.id)
+                selectedElementID = element.id
+            }
+        } else if let groupID = element.groupID {
+            let group = Set(page.elements.filter { $0.groupID == groupID }.map(\.id))
+            selectedElementIDs.wrappedValue = group
+            selectedElementID = element.id
+        } else {
+            selectedElementIDs.wrappedValue = [element.id]
+            selectedElementID = element.id
+        }
+    }
+
+    private func isSelected(_ element: MemoryBookElement) -> Bool {
+        activeSelectionIDs.contains(element.id)
+    }
+
+    @ViewBuilder private func snapGuideOverlay(_ plan: MemoryBookPageRenderPlan) -> some View {
+        if editing, let x = snapGuides.vertical {
+            Rectangle()
+                .fill(TailorColor.clay)
+                .frame(width: 1.5, height: plan.paperRect.height)
+                .position(x: plan.paperRect.minX + x * plan.paperRect.width, y: plan.paperRect.midY)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("Vertical snap guide")
+                .accessibilityLabel("Vertically aligned")
+        }
+        if editing, let y = snapGuides.horizontal {
+            Rectangle()
+                .fill(TailorColor.clay)
+                .frame(width: plan.paperRect.width, height: 1.5)
+                .position(x: plan.paperRect.midX, y: plan.paperRect.minY + y * plan.paperRect.height)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("Horizontal snap guide")
+                .accessibilityLabel("Horizontally aligned")
+        }
+    }
+
     @ViewBuilder private func watermarkView(_ plan: MemoryBookPageRenderPlan) -> some View {
         if let watermark = plan.watermark,
            let fontSize = plan.watermarkFontSize(),
@@ -395,34 +977,26 @@ private struct EditorBookPageCanvas: View {
             if let textLayout = plan.textLayout(for: element) {
                 MemoryBookAttributedTextPreview(
                     snapshot: textLayout,
-                    color: uiColor(element.textCustomColor ?? element.textColor.rgb(fallback: plan.fontToken(for: element) == .display ? plan.style.ink : plan.style.secondary))
+                    color: uiColor(element.textCustomColor ?? element.textColor.rgb(fallback: plan.fontToken(for: element) == .display ? plan.style.ink : plan.style.secondary)),
+                    diagnosticRole: element.textField?.rawValue ?? element.id.uuidString
                 )
                 .frame(width: frame.width, height: frame.height, alignment: .leading)
                 // UIKit only paints the shared B1 attributed paragraph. The
                 // editor interaction lives on this SwiftUI overlay so it has
                 // a stable, real accessibility frame for VoiceOver/XCTest.
                 .allowsHitTesting(false)
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(textDraftHighlight?.pageID == page.id && textDraftHighlight?.elementID == element.id && textDraftHighlight?.isInvalid == true ? .red : (selectedElementID == element.id && editing ? TailorColor.clay : .clear), style: StrokeStyle(lineWidth: 2, dash: [4, 3])))
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(textDraftHighlight?.pageID == page.id && textDraftHighlight?.elementID == element.id && textDraftHighlight?.isInvalid == true ? .red : (isSelected(element) && editing ? TailorColor.clay : .clear), style: StrokeStyle(lineWidth: 2, dash: [4, 3])))
                 .overlay {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(dragGesture(element, size: plan.pageSize, plan: plan))
-                        .onTapGesture { if editing { selectedElementID = element.id } }
+                        .onTapGesture { select(element) }
                         .allowsHitTesting(editing)
                         // This document-derived marker is intentionally
                         // attached to the interaction surface, not UIKit.
                         .accessibilityIdentifier("Text element \(element.textField?.rawValue ?? "unassigned")")
-                        .accessibilityLabel(selectedElementID == element.id ? "Selected text element" : "Text element")
+                        .accessibilityLabel(isSelected(element) ? "Selected text element" : "Text element")
                         .accessibilityValue(memoryBookTextFrameMarker(element, layout: textLayout, paperRect: plan.paperRect))
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if selectedElementID == element.id && editing {
-                        TextRotationHandle()
-                            .offset(x: 12, y: 12)
-                            .gesture(textRotationHandleGesture(element, frame: frame))
-                            .accessibilityLabel("Rotate selected text")
-                            .accessibilityHint("Drag around the text to rotate it.")
-                    }
                 }
                 .rotationEffect(.degrees(element.rotationDegrees))
                 .position(x: frame.midX, y: frame.midY)
@@ -432,6 +1006,43 @@ private struct EditorBookPageCanvas: View {
                     .frame(width: frame.width, height: frame.height, alignment: .leading)
                     .position(x: frame.midX, y: frame.midY)
             }
+        case .shape:
+            MemoryBookElementMaskShape(
+                mask: element.appearance.mask,
+                cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width
+            )
+            .fill(color(element.appearance.fillColor ?? plan.style.accent))
+            .overlay {
+                if element.appearance.borderStyle != .none {
+                    MemoryBookElementMaskShape(mask: element.appearance.mask, cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width)
+                        .stroke(
+                            color(element.appearance.borderColor),
+                            style: StrokeStyle(
+                                lineWidth: element.appearance.borderWidthRatio * plan.paperRect.width,
+                                dash: element.appearance.borderStyle == .dashed ? [6 / 612 * plan.paperRect.width, 4 / 612 * plan.paperRect.width] : []
+                            )
+                        )
+                }
+            }
+            .shadow(
+                color: .black.opacity(element.appearance.shadowOpacity),
+                radius: element.appearance.shadowBlurRatio * plan.paperRect.width,
+                x: element.appearance.shadowOffset.width * plan.paperRect.width,
+                y: element.appearance.shadowOffset.height * plan.paperRect.width
+            )
+            .opacity(element.appearance.opacity)
+            .overlay(MemoryBookElementMaskShape(mask: element.appearance.mask, cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width).stroke(isSelected(element) && editing ? TailorColor.clay : .clear, lineWidth: 2))
+            .frame(width: frame.width, height: frame.height)
+            .contentShape(Rectangle())
+            .gesture(dragGesture(element, size: plan.pageSize, plan: plan))
+            .simultaneousGesture(rotationGesture(element))
+            .onTapGesture { select(element) }
+            .allowsHitTesting(editing)
+            .accessibilityIdentifier("Decoration element")
+            .accessibilityLabel(isSelected(element) ? "Selected decoration" : "Decoration")
+            .accessibilityValue(memoryBookTransformMarker(element))
+            .rotationEffect(.degrees(element.rotationDegrees))
+            .position(x: frame.midX, y: frame.midY)
         case .image:
             if let assetID = element.assetID, let photo = document.photos.first(where: { $0.id == assetID && $0.isEligibleForArchive && isPhotoAvailable($0) }) {
                 // Rotation belongs to the image element, not to the pixels
@@ -444,13 +1055,39 @@ private struct EditorBookPageCanvas: View {
                         identifier: photo.assetLocalIdentifier,
                         contentMode: element.imageContentMode == .fit ? .fit : .fill,
                         treatment: plan.style.imageTreatment,
+                        adjustments: element.imageAdjustments,
                         background: .clear
                     )
                 }
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(selectedElementID == element.id && editing ? TailorColor.clay : .clear, lineWidth: 2))
+                    .clipShape(MemoryBookElementMaskShape(
+                        mask: element.appearance.mask,
+                        cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width
+                    ))
                     .overlay {
-                        if selectedElementID == element.id && editing {
+                        if element.appearance.borderStyle != .none {
+                            MemoryBookElementMaskShape(
+                                mask: element.appearance.mask,
+                                cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width
+                            )
+                            .stroke(
+                                color(element.appearance.borderColor),
+                                style: StrokeStyle(
+                                    lineWidth: element.appearance.borderWidthRatio * plan.paperRect.width,
+                                    dash: element.appearance.borderStyle == .dashed ? [6 / 612 * plan.paperRect.width, 4 / 612 * plan.paperRect.width] : []
+                                )
+                            )
+                        }
+                    }
+                    .shadow(
+                        color: .black.opacity(element.appearance.shadowOpacity),
+                        radius: element.appearance.shadowBlurRatio * plan.paperRect.width,
+                        x: element.appearance.shadowOffset.width * plan.paperRect.width,
+                        y: element.appearance.shadowOffset.height * plan.paperRect.width
+                    )
+                    .opacity(element.appearance.opacity)
+                    .overlay(MemoryBookElementMaskShape(mask: element.appearance.mask, cornerRadius: element.appearance.cornerRadiusRatio * plan.paperRect.width).stroke(isSelected(element) && editing ? TailorColor.clay : .clear, lineWidth: 2))
+                    .overlay {
+                        if isSelected(element) && activeSelectionIDs.count == 1 && editing {
                             SelectedPhotoChrome()
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
@@ -469,10 +1106,10 @@ private struct EditorBookPageCanvas: View {
                     .gesture(dragGesture(element, size: plan.pageSize, plan: plan))
                     .simultaneousGesture(magnifyGesture(element))
                     .simultaneousGesture(rotationGesture(element))
-                    .onTapGesture { if editing { selectedElementID = element.id } }
-                    .accessibilityAction { if editing { selectedElementID = element.id } }
+                    .onTapGesture { select(element) }
+                    .accessibilityAction { select(element) }
                     .allowsHitTesting(editing)
-                    .accessibilityLabel(selectedElementID == element.id ? "Selected photo. Drag to reposition, pinch to resize, or rotate with two fingers." : "Photo element")
+                    .accessibilityLabel(isSelected(element) ? "Selected photo. Drag to reposition, pinch to resize, or rotate with two fingers." : "Photo element")
                     .accessibilityIdentifier("Photo element")
                     // This is intentionally exposed in UI-test builds as a
                     // document readback marker. It lets the crop tests prove
@@ -480,7 +1117,7 @@ private struct EditorBookPageCanvas: View {
                     // Done/Undo/Redo restore the exact persisted transform.
                     .accessibilityValue(memoryBookTransformMarker(element))
                     .overlay(alignment: .topLeading) {
-                        if selectedElementID == element.id {
+                        if isSelected(element) {
                             // Separate from the tappable image so XCTest can
                             // read the selected document element deterministically
                             // when a page contains several photos.
@@ -534,35 +1171,150 @@ private struct EditorBookPageCanvas: View {
 
     private func dragGesture(_ element: MemoryBookElement, size: CGSize, plan: MemoryBookPageRenderPlan) -> some Gesture {
         DragGesture().onChanged { value in
-            guard selectedElementID == element.id,
-                  let index = page.elements.firstIndex(where: { $0.id == element.id }) else { return }
+            guard editing,
+                  let index = page.elements.firstIndex(where: { $0.id == element.id }),
+                  !page.elements[index].isInteractionLocked else { return }
+            // Direct manipulation should not require a preparatory tap. A
+            // drag both selects the touched element and starts one atomic
+            // history transaction.
+            if !isSelected(element) { select(element) }
             if startFrame == nil { beginEdit(); startFrame = page.elements[index].normalizedFrame }
             var frame = startFrame ?? page.elements[index].normalizedFrame
+            let horizontalScale = max(1, plan.paperRect.width)
+            let verticalScale = max(1, plan.paperRect.height)
+            let attempted = CGRect(
+                x: frame.origin.x + value.translation.width / horizontalScale,
+                y: frame.origin.y + value.translation.height / verticalScale,
+                width: frame.width,
+                height: frame.height
+            )
+            let snapped = MemoryBookEditorSnapEngine.snap(
+                frame: attempted,
+                peerFrames: page.elements.filter { $0.id != element.id }.map(\.normalizedFrame),
+                threshold: 7 / min(horizontalScale, verticalScale)
+            )
+            frame = snapped.frame
             if element.kind == .text, plan.textLayout(for: element) != nil {
-                let attempted = CGRect(x: frame.origin.x + value.translation.width / size.width, y: frame.origin.y + value.translation.height / size.height, width: frame.width, height: frame.height)
-                frame = plan.clampedTextFrame(attempted, for: element)
+                frame = plan.clampedTextFrame(frame, for: element)
             } else {
-                let safeInset: CGFloat = element.kind == .image ? 0 : MemoryBookPageRenderPlan.safeInsetRatio
-                frame.origin.x = min(max(safeInset, frame.origin.x + value.translation.width / size.width), 1 - safeInset - frame.width)
-                frame.origin.y = min(max(safeInset, frame.origin.y + value.translation.height / size.height), 1 - safeInset - frame.height)
+                let safeInset: CGFloat = element.kind == .text ? MemoryBookPageRenderPlan.safeInsetRatio : 0
+                frame.origin.x = min(max(safeInset, frame.origin.x), 1 - safeInset - frame.width)
+                frame.origin.y = min(max(safeInset, frame.origin.y), 1 - safeInset - frame.height)
             }
+            snapGuides = visibleSnapGuides(snapped.guides, for: frame)
             page.elements[index].normalizedFrame = frame; page.elements[index].isLayoutLocked = true; page.elements[index].origin = .user
         }.onEnded { _ in
             guard startFrame != nil else { return }
-            startFrame = nil; endEdit()
+            startFrame = nil; snapGuides = .none; endEdit()
         }
+    }
+
+    private func groupDragGesture(_ elements: [MemoryBookElement], plan: MemoryBookPageRenderPlan) -> some Gesture {
+        DragGesture().onChanged { value in
+            let ids = Set(elements.map(\.id))
+            guard editing, elements.count > 1,
+                  elements.allSatisfy({ !$0.isInteractionLocked }) else { return }
+            if startGroupFrames.isEmpty {
+                beginEdit()
+                startGroupFrames = Dictionary(uniqueKeysWithValues: page.elements.filter { ids.contains($0.id) }.map { ($0.id, $0.normalizedFrame) })
+            }
+            guard let first = startGroupFrames.values.first else { return }
+            let bounds = startGroupFrames.values.dropFirst().reduce(first) { $0.union($1) }
+            let horizontalScale = max(1, plan.paperRect.width)
+            let verticalScale = max(1, plan.paperRect.height)
+            let attempted = CGRect(
+                x: bounds.minX + value.translation.width / horizontalScale,
+                y: bounds.minY + value.translation.height / verticalScale,
+                width: bounds.width,
+                height: bounds.height
+            )
+            let snapped = MemoryBookEditorSnapEngine.snap(
+                frame: attempted,
+                peerFrames: page.elements.filter { !ids.contains($0.id) }.map(\.normalizedFrame),
+                threshold: 7 / min(horizontalScale, verticalScale)
+            )
+            let targetX = min(max(0, snapped.frame.minX), 1 - bounds.width)
+            let targetY = min(max(0, snapped.frame.minY), 1 - bounds.height)
+            let dx = targetX - bounds.minX
+            let dy = targetY - bounds.minY
+            for index in page.elements.indices where ids.contains(page.elements[index].id) {
+                guard let original = startGroupFrames[page.elements[index].id] else { continue }
+                page.elements[index].normalizedFrame.origin = CGPoint(x: original.minX + dx, y: original.minY + dy)
+                page.elements[index].isLayoutLocked = true
+                page.elements[index].origin = .user
+                page.elements[index].updatedAt = .now
+            }
+            snapGuides = visibleSnapGuides(snapped.guides, for: CGRect(x: targetX, y: targetY, width: bounds.width, height: bounds.height))
+        }.onEnded { _ in
+            guard !startGroupFrames.isEmpty else { return }
+            startGroupFrames.removeAll()
+            snapGuides = .none
+            endEdit()
+        }
+    }
+
+    private func visibleSnapGuides(_ guides: MemoryBookEditorSnapGuides, for frame: CGRect) -> MemoryBookEditorSnapGuides {
+        let tolerance: CGFloat = 0.001
+        let xAnchors = [frame.minX, frame.midX, frame.maxX]
+        let yAnchors = [frame.minY, frame.midY, frame.maxY]
+        return MemoryBookEditorSnapGuides(
+            vertical: guides.vertical.flatMap { guide in xAnchors.contains(where: { abs($0 - guide) <= tolerance }) ? guide : nil },
+            horizontal: guides.horizontal.flatMap { guide in yAnchors.contains(where: { abs($0 - guide) <= tolerance }) ? guide : nil }
+        )
     }
 
     private func magnifyGesture(_ element: MemoryBookElement) -> some Gesture {
         MagnifyGesture().onChanged { value in
             guard selectedElementID == element.id,
-                  let index = page.elements.firstIndex(where: { $0.id == element.id }) else { return }
+                  let index = page.elements.firstIndex(where: { $0.id == element.id }),
+                  !page.elements[index].isInteractionLocked else { return }
             if startImageFrame == nil { beginEdit(); startImageFrame = page.elements[index].normalizedFrame }
             page.elements[index].normalizedFrame = resizedImageFrame(startImageFrame ?? page.elements[index].normalizedFrame, magnification: value.magnification)
             page.elements[index].isLayoutLocked = true; page.elements[index].origin = .user
         }.onEnded { _ in
             guard startImageFrame != nil else { return }
             startImageFrame = nil; endEdit()
+        }
+    }
+
+    private func resizeHandleGesture(_ element: MemoryBookElement, plan: MemoryBookPageRenderPlan) -> some Gesture {
+        DragGesture().onChanged { value in
+            guard editing,
+                  selectedElementID == element.id,
+                  let index = page.elements.firstIndex(where: { $0.id == element.id }),
+                  !page.elements[index].isInteractionLocked else { return }
+            if startResizeFrame == nil {
+                beginEdit()
+                startResizeFrame = page.elements[index].normalizedFrame
+            }
+            let original = startResizeFrame ?? page.elements[index].normalizedFrame
+            let dx = value.translation.width / max(1, plan.paperRect.width)
+            let dy = value.translation.height / max(1, plan.paperRect.height)
+            var resized = original
+            if element.kind == .image {
+                let aspect = original.height / max(0.01, original.width)
+                let widthDelta = abs(dx) >= abs(dy) ? dx : dy / max(0.01, aspect)
+                resized.size.width = min(1 - original.minX, max(0.10, original.width + widthDelta))
+                resized.size.height = min(1 - original.minY, max(0.10, resized.width * aspect))
+                if resized.height >= 1 - original.minY {
+                    resized.size.height = 1 - original.minY
+                    resized.size.width = resized.height / max(0.01, aspect)
+                }
+            } else if element.kind == .shape {
+                resized.size.width = min(1 - original.minX, max(0.04, original.width + dx))
+                resized.size.height = min(1 - original.minY, max(0.04, original.height + dy))
+            } else {
+                resized.size.width = min(1 - original.minX - MemoryBookPageRenderPlan.safeInsetRatio, max(0.12, original.width + dx))
+                resized.size.height = min(1 - original.minY - MemoryBookPageRenderPlan.safeInsetRatio, max(0.06, original.height + dy))
+                resized = plan.clampedTextFrame(resized, for: element)
+            }
+            page.elements[index].normalizedFrame = resized
+            page.elements[index].isLayoutLocked = true
+            page.elements[index].origin = .user
+        }.onEnded { _ in
+            guard startResizeFrame != nil else { return }
+            startResizeFrame = nil
+            endEdit()
         }
     }
 
@@ -588,7 +1340,8 @@ private struct EditorBookPageCanvas: View {
     private func rotationGesture(_ element: MemoryBookElement) -> some Gesture {
         RotateGesture().onChanged { value in
             guard selectedElementID == element.id,
-                  let index = page.elements.firstIndex(where: { $0.id == element.id }) else { return }
+                  let index = page.elements.firstIndex(where: { $0.id == element.id }),
+                  !page.elements[index].isInteractionLocked else { return }
             if startRotation == nil { beginEdit(); startRotation = page.elements[index].rotationDegrees }
             let degrees = (startRotation ?? 0) + value.rotation.degrees
             // A small snap zone gives a satisfying straight result without
@@ -604,7 +1357,8 @@ private struct EditorBookPageCanvas: View {
     private func textRotationHandleGesture(_ element: MemoryBookElement, frame: CGRect) -> some Gesture {
         DragGesture(coordinateSpace: .named(canvasCoordinateSpace)).onChanged { value in
             guard selectedElementID == element.id,
-                  let index = page.elements.firstIndex(where: { $0.id == element.id }) else { return }
+                  let index = page.elements.firstIndex(where: { $0.id == element.id }),
+                  !page.elements[index].isInteractionLocked else { return }
             if startRotation == nil {
                 beginEdit()
                 startRotation = page.elements[index].rotationDegrees
@@ -627,6 +1381,24 @@ private struct EditorBookPageCanvas: View {
 
     private func angle(from centre: CGPoint, to point: CGPoint) -> Double {
         atan2(Double(point.y - centre.y), Double(point.x - centre.x)) * 180 / .pi
+    }
+}
+
+/// SwiftUI counterpart of the PDF mask path. It consumes the same normalized
+/// appearance contract instead of choosing a canvas-only clipping shape.
+private struct MemoryBookElementMaskShape: Shape {
+    let mask: MemoryBookElementMask
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        switch mask {
+        case .rectangle:
+            Path(rect)
+        case .roundedRectangle:
+            Path(roundedRect: rect, cornerRadius: min(cornerRadius, min(rect.width, rect.height) / 2))
+        case .ellipse:
+            Path(ellipseIn: rect)
+        }
     }
 }
 
@@ -691,12 +1463,29 @@ private struct TextRotationHandle: View {
     }
 }
 
+private struct ElementResizeHandle: View {
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(TailorColor.ink)
+            .frame(width: 32, height: 32)
+            .background(Circle().fill(TailorColor.paper))
+            .overlay(Circle().stroke(TailorColor.clay, lineWidth: 2))
+            .shadow(color: .black.opacity(0.18), radius: 3, y: 1)
+            .contentShape(Circle())
+            .accessibilityIdentifier("Element resize handle")
+            .accessibilityLabel("Resize selected element")
+            .accessibilityHint("Drag to change the element frame.")
+    }
+}
+
 /// Preview's UIKit bridge deliberately receives the renderer factory's full
 /// attributed paragraph rather than reconstructing a subset with SwiftUI
 /// modifiers. PDF calls the same `MemoryBookTextRenderer` factory.
 private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
     let snapshot: MemoryBookTextLayoutSnapshot
     let color: UIColor
+    let diagnosticRole: String
 
     func makeUIView(context: Context) -> MemoryBookPreviewLabel {
         let label = MemoryBookPreviewLabel()
@@ -747,7 +1536,7 @@ private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
         label.setNeedsLayout()
         if ProcessInfo.processInfo.arguments.contains("-uiTesting") {
             label.isAccessibilityElement = true
-            label.accessibilityIdentifier = "Text renderer diagnostic"
+            label.accessibilityIdentifier = "Text renderer diagnostic \(diagnosticRole)"
             label.accessibilityLabel = snapshot.value
             // `updateUIView` can run before SwiftUI resolves the representable
             // frame, when UIKit temporarily reports an infinite dimension.
@@ -790,6 +1579,143 @@ private final class MemoryBookPreviewLabel: UILabel {
     override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
         let measured = super.textRect(forBounds: bounds, limitedToNumberOfLines: numberOfLines)
         return CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: min(bounds.height, measured.height))
+    }
+}
+
+private struct ElementLayersSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var book: MemoryBookDocument
+    let pageID: UUID?
+    @Binding var selectedElementID: UUID?
+    @Binding var selectedElementIDs: Set<UUID>
+    let recordHistory: () -> Void
+    let commit: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let pageIndex {
+                    List {
+                        ForEach(Array(orderedElements(pageIndex).enumerated()), id: \.element.id) { offset, element in
+                            layerRow(element, number: offset + 1, pageIndex: pageIndex)
+                        }
+                    }
+                } else {
+                    ContentUnavailableView("No page selected", systemImage: "square.stack.3d.up.slash")
+                }
+            }
+            .navigationTitle("Layers")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private var pageIndex: Int? { book.pages.firstIndex(where: { $0.id == pageID }) }
+
+    private func orderedElements(_ pageIndex: Int) -> [MemoryBookElement] {
+        book.pages[pageIndex].elements.sorted {
+            $0.zIndex == $1.zIndex ? $0.id.uuidString > $1.id.uuidString : $0.zIndex > $1.zIndex
+        }
+    }
+
+    private func layerName(_ element: MemoryBookElement) -> String {
+        if element.kind == .image { return "Photo" }
+        if element.kind == .shape { return "Decoration" }
+        let value = (element.text ?? "Text").trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "Text" : String(value.prefix(28))
+    }
+
+    private func layerIcon(_ element: MemoryBookElement) -> String {
+        switch element.kind {
+        case .image: "photo"
+        case .text: "textformat"
+        case .shape: "square.on.circle"
+        }
+    }
+
+    private func layerRow(_ element: MemoryBookElement, number: Int, pageIndex: Int) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                selectedElementID = element.id
+                if let groupID = element.groupID {
+                    selectedElementIDs = Set(book.pages[pageIndex].elements.filter { $0.groupID == groupID }.map(\.id))
+                } else {
+                    selectedElementIDs = [element.id]
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: layerIcon(element))
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(layerName(element)).lineLimit(1)
+                        Text("Layer \(number) · z \(element.zIndex)").font(.caption2).foregroundStyle(TailorColor.secondaryInk)
+                    }
+                    Spacer()
+                    if selectedElementIDs.contains(element.id) { Image(systemName: "checkmark.circle.fill").foregroundStyle(TailorColor.clay) }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("Layer row \(element.id.uuidString)")
+
+            Button { toggleVisibility(element.id, pageIndex: pageIndex) } label: {
+                Image(systemName: element.isHidden ? "eye.slash" : "eye")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("\(element.isHidden ? "Show" : "Hide") \(layerName(element)) layer")
+
+            Button { toggleLock(element.id, pageIndex: pageIndex) } label: {
+                Image(systemName: element.isInteractionLocked ? "lock.fill" : "lock.open")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("\(element.isInteractionLocked ? "Unlock" : "Lock") \(layerName(element)) layer")
+
+            Menu {
+                Button("Bring layer forward") { moveLayer(element.id, pageIndex: pageIndex, toFront: true, oneStep: true) }
+                Button("Send layer backward") { moveLayer(element.id, pageIndex: pageIndex, toFront: false, oneStep: true) }
+                Button("Bring layer to front") { moveLayer(element.id, pageIndex: pageIndex, toFront: true, oneStep: false) }
+                Button("Send layer to back") { moveLayer(element.id, pageIndex: pageIndex, toFront: false, oneStep: false) }
+            } label: { Image(systemName: "ellipsis.circle") }
+                .accessibilityLabel("Layer actions \(layerName(element))")
+        }
+    }
+
+    private func toggleVisibility(_ elementID: UUID, pageIndex: Int) {
+        guard let index = book.pages[pageIndex].elements.firstIndex(where: { $0.id == elementID }) else { return }
+        recordHistory()
+        book.pages[pageIndex].elements[index].isHidden.toggle()
+        book.pages[pageIndex].elements[index].isLayoutLocked = true
+        book.pages[pageIndex].elements[index].origin = .user
+        book.pages[pageIndex].elements[index].updatedAt = .now
+        commit()
+    }
+
+    private func toggleLock(_ elementID: UUID, pageIndex: Int) {
+        guard let index = book.pages[pageIndex].elements.firstIndex(where: { $0.id == elementID }) else { return }
+        recordHistory()
+        book.pages[pageIndex].elements[index].isInteractionLocked.toggle()
+        book.pages[pageIndex].elements[index].origin = .user
+        book.pages[pageIndex].elements[index].updatedAt = .now
+        commit()
+    }
+
+    private func moveLayer(_ elementID: UUID, pageIndex: Int, toFront: Bool, oneStep: Bool) {
+        guard let index = book.pages[pageIndex].elements.firstIndex(where: { $0.id == elementID }) else { return }
+        let ordered = book.pages[pageIndex].elements.sorted {
+            $0.zIndex == $1.zIndex ? $0.id.uuidString < $1.id.uuidString : $0.zIndex < $1.zIndex
+        }
+        guard let position = ordered.firstIndex(where: { $0.id == elementID }) else { return }
+        let oneStepTarget = toFront ? position + 1 : position - 1
+        if oneStep { guard ordered.indices.contains(oneStepTarget) else { return } }
+        recordHistory()
+        if oneStep {
+            book.pages[pageIndex].elements[index].zIndex = ordered[oneStepTarget].zIndex + (toFront ? 1 : -1)
+        } else if toFront {
+            book.pages[pageIndex].elements[index].zIndex = (ordered.map(\.zIndex).max() ?? 0) + 1
+        } else {
+            book.pages[pageIndex].elements[index].zIndex = (ordered.map(\.zIndex).min() ?? 0) - 1
+        }
+        book.pages[pageIndex].elements[index].origin = .user
+        book.pages[pageIndex].elements[index].updatedAt = .now
+        commit()
     }
 }
 
@@ -970,11 +1896,17 @@ private struct PhotoPickerSheet: View {
     let recordHistory: () -> Void
     let commit: () -> Void
     @State private var resetTarget: ResetTarget?
+    @State private var appearanceTarget: AppearanceTarget?
 
     private struct ResetTarget: Identifiable {
         let id = UUID()
         let pageIndex: Int
         let elementIndex: Int
+    }
+    private struct AppearanceTarget: Identifiable {
+        let id = UUID()
+        let pageID: UUID
+        let elementID: UUID
     }
 
     var body: some View {
@@ -986,6 +1918,10 @@ private struct PhotoPickerSheet: View {
                     Section("Selected photo") {
                         Button("Crop") { requestCrop(book.pages[pageIndex].id, book.pages[pageIndex].elements[elementIndex].id); dismiss() }
                             .accessibilityIdentifier("Photo tool crop")
+                        Button("Appearance", systemImage: "paintbrush") {
+                            appearanceTarget = AppearanceTarget(pageID: book.pages[pageIndex].id, elementID: book.pages[pageIndex].elements[elementIndex].id)
+                        }
+                        .accessibilityIdentifier("Photo appearance")
                         Picker("Photo fit", selection: Binding(
                             get: { book.pages[pageIndex].elements[elementIndex].imageContentMode },
                             set: { mode in
@@ -1028,12 +1964,14 @@ private struct PhotoPickerSheet: View {
                         }
                         Button("Remove from page", role: .destructive) { recordHistory(); let assetID = book.pages[pageIndex].elements[elementIndex].assetID; book.pages[pageIndex].elements.remove(at: elementIndex); if let assetID { book.pages[pageIndex].photoIDs.removeAll { $0 == assetID } }; commit(); dismiss() }
                     }
+                    .disabled(book.pages[pageIndex].elements[elementIndex].isInteractionLocked)
                 }
                 Section("Choose from selected photos") {
                     ForEach(book.eligiblePhotos) { photo in Button { insert(photo.id) } label: { HStack { PhotoAssetThumbnail(identifier: photo.assetLocalIdentifier).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 6)); VStack(alignment: .leading) { Text(photo.createdAt?.formatted(date: .abbreviated, time: .omitted) ?? "No date"); Text("Use this photo").font(.caption).foregroundStyle(TailorColor.secondaryInk) }; Spacer(); Image(systemName: "plus.circle") } }
                         .accessibilityIdentifier("Replace photo \(photo.assetLocalIdentifier)")
                     }
                 }
+                .disabled(selectedElementIsInteractionLocked)
             }
             .navigationTitle("Photos")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
@@ -1044,11 +1982,29 @@ private struct PhotoPickerSheet: View {
                 }
                 Button("Cancel", role: .cancel) { resetTarget = nil }
             } message: {
-                Text("This restores the template frame, crop, rotation, and layer order. You can still undo it.")
+                Text("This restores the template frame, crop, rotation, appearance, and layer order. You can still undo it.")
+            }
+            .sheet(item: $appearanceTarget) { target in
+                PhotoAppearanceEditorSheet(
+                    book: $book,
+                    pageID: target.pageID,
+                    elementID: target.elementID,
+                    recordHistory: recordHistory,
+                    commit: commit
+                )
             }
         }
     }
+
+    private var selectedElementIsInteractionLocked: Bool {
+        guard let pageIndex = book.pages.firstIndex(where: { $0.id == selectedPageID }),
+              let selectedElementID,
+              let element = book.pages[pageIndex].elements.first(where: { $0.id == selectedElementID }) else { return false }
+        return element.isInteractionLocked
+    }
+
     private func insert(_ photoID: UUID) {
+        guard !selectedElementIsInteractionLocked else { return }
         guard let pageIndex = book.pages.firstIndex(where: { $0.id == selectedPageID }) else { return }
         recordHistory()
         if let elementID = selectedElementID, let index = book.pages[pageIndex].elements.firstIndex(where: { $0.id == elementID }) {
@@ -1116,10 +2072,350 @@ private struct PhotoPickerSheet: View {
             book.pages[pageIndex].elements[elementIndex].cropScale = 1
             book.pages[pageIndex].elements[elementIndex].cropOffset = .zero
             book.pages[pageIndex].elements[elementIndex].rotationDegrees = 0
+            book.pages[pageIndex].elements[elementIndex].appearance = .default
+            book.pages[pageIndex].elements[elementIndex].imageAdjustments = .default
+            book.pages[pageIndex].elements[elementIndex].imageTransformAdjustments = .default
             book.pages[pageIndex].elements[elementIndex].isLayoutLocked = false
             book.pages[pageIndex].elements[elementIndex].origin = .automatic
         }
         commit()
+    }
+}
+
+private struct PhotoAppearanceEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var book: MemoryBookDocument
+    let pageID: UUID
+    let elementID: UUID
+    let recordHistory: () -> Void
+    let commit: () -> Void
+    @State private var draft: MemoryBookElementAppearance
+    @State private var draftAdjustments: MemoryBookImageAdjustments
+    @State private var draftTransformAdjustments: MemoryBookImageTransformAdjustments
+    @State private var isAutoEnhancing = false
+
+    init(book: Binding<MemoryBookDocument>, pageID: UUID, elementID: UUID, recordHistory: @escaping () -> Void, commit: @escaping () -> Void) {
+        self._book = book
+        self.pageID = pageID
+        self.elementID = elementID
+        self.recordHistory = recordHistory
+        self.commit = commit
+        let appearance = book.wrappedValue.pages
+            .first(where: { $0.id == pageID })?.elements
+            .first(where: { $0.id == elementID })?.appearance ?? .default
+        let adjustments = book.wrappedValue.pages
+            .first(where: { $0.id == pageID })?.elements
+            .first(where: { $0.id == elementID })?.imageAdjustments ?? .default
+        let transformAdjustments = book.wrappedValue.pages
+            .first(where: { $0.id == pageID })?.elements
+            .first(where: { $0.id == elementID })?.imageTransformAdjustments ?? .default
+        self._draft = State(initialValue: appearance)
+        self._draftAdjustments = State(initialValue: adjustments)
+        self._draftTransformAdjustments = State(initialValue: transformAdjustments)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    preview
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(TailorColor.mist.opacity(0.45))
+                }
+                Section("Shape") {
+                    Picker("Mask", selection: $draft.mask) {
+                        ForEach(MemoryBookElementMask.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    if draft.mask == .roundedRectangle {
+                        valueSlider("Corner radius", value: $draft.cornerRadiusRatio, range: 0...0.12, percent: true)
+                    }
+                    valueSlider("Opacity", value: Binding(get: { CGFloat(draft.opacity) }, set: { draft.opacity = Double($0) }), range: 0.2...1, percent: true)
+                    if isDecoration {
+                        ColorPicker("Fill color", selection: fillColor, supportsOpacity: false)
+                    }
+                }
+                Section("Border") {
+                    Picker("Style", selection: $draft.borderStyle) {
+                        ForEach(MemoryBookElementBorderStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    if draft.borderStyle != .none {
+                        valueSlider("Width", value: $draft.borderWidthRatio, range: 1 / 612...12 / 612, percent: false)
+                        ColorPicker("Color", selection: borderColor, supportsOpacity: false)
+                    }
+                }
+                Section("Shadow") {
+                    Button(draft.shadowOpacity > 0 ? "Remove shadow" : "Add shadow", systemImage: draft.shadowOpacity > 0 ? "shadow.slash" : "shadow") {
+                        draft.shadowOpacity = draft.shadowOpacity > 0 ? 0 : 0.24
+                    }
+                    .accessibilityIdentifier(isDecoration ? "Toggle decoration shadow" : "Toggle photo shadow")
+                    if draft.shadowOpacity > 0 {
+                        valueSlider("Strength", value: Binding(get: { CGFloat(draft.shadowOpacity) }, set: { draft.shadowOpacity = Double($0) }), range: 0.05...0.60, percent: true)
+                        valueSlider("Softness", value: $draft.shadowBlurRatio, range: 2 / 612...30 / 612, percent: false)
+                        valueSlider("Horizontal", value: Binding(get: { draft.shadowOffset.width }, set: { draft.shadowOffset.width = $0 }), range: -20 / 612...20 / 612, percent: false)
+                        valueSlider("Vertical", value: Binding(get: { draft.shadowOffset.height }, set: { draft.shadowOffset.height = $0 }), range: -20 / 612...20 / 612, percent: false)
+                    }
+                }
+                if !isDecoration {
+                Section("Photo geometry") {
+                    HStack {
+                        Button {
+                            draftTransformAdjustments.flipHorizontal.toggle()
+                        } label: {
+                            Label(
+                                draftTransformAdjustments.flipHorizontal ? "Horizontal flipped" : "Flip horizontal",
+                                systemImage: draftTransformAdjustments.flipHorizontal
+                                    ? "checkmark.circle.fill"
+                                    : "arrow.left.and.right.righttriangle.left.righttriangle.right"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(draftTransformAdjustments.flipHorizontal ? TailorColor.clay : TailorColor.ink)
+                        .accessibilityIdentifier("Flip photo horizontal")
+                        .accessibilityValue(draftTransformAdjustments.flipHorizontal ? "On" : "Off")
+                        Button {
+                            draftTransformAdjustments.flipVertical.toggle()
+                        } label: {
+                            Label(
+                                draftTransformAdjustments.flipVertical ? "Vertical flipped" : "Flip vertical",
+                                systemImage: draftTransformAdjustments.flipVertical
+                                    ? "checkmark.circle.fill"
+                                    : "arrow.up.and.down.righttriangle.up.righttriangle.down"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(draftTransformAdjustments.flipVertical ? TailorColor.clay : TailorColor.ink)
+                        .accessibilityIdentifier("Flip photo vertical")
+                        .accessibilityValue(draftTransformAdjustments.flipVertical ? "On" : "Off")
+                    }
+                    if selectedElement?.imageContentMode == .fill {
+                        adjustmentSlider("Straighten", value: $draftTransformAdjustments.straightenDegrees, range: -15...15)
+                    } else {
+                        Text("Straighten is available with Fill frame so the final image never exposes a blank edge.")
+                            .font(.caption)
+                            .foregroundStyle(TailorColor.secondaryInk)
+                    }
+                    Button("Reset photo geometry", role: .destructive) { draftTransformAdjustments = .default }
+                }
+                Section("Photo finishing") {
+                    Button {
+                        autoEnhance()
+                    } label: {
+                        HStack {
+                            Label("Auto Enhance", systemImage: "wand.and.stars")
+                            Spacer()
+                            if isAutoEnhancing { ProgressView() }
+                        }
+                    }
+                    .disabled(isAutoEnhancing)
+                    .accessibilityIdentifier("Photo auto enhance")
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            presetButton("Natural", adjustments: .default)
+                            presetButton("Bright & clean", adjustments: .init(exposure: 0.30, brightness: 0.04, contrast: 1.04, saturation: 1.03, warmth: 0, highlights: 0.16, shadows: 0.18, vignette: 0, sharpness: 0.18))
+                            presetButton("Warm memory", adjustments: .init(exposure: 0.10, brightness: 0.02, contrast: 1.06, saturation: 0.94, warmth: 0.28, highlights: 0.12, shadows: 0.12, vignette: 0.12, sharpness: 0.10))
+                            presetButton("Soft portrait", adjustments: .init(exposure: 0.12, brightness: 0.03, contrast: 0.94, saturation: 0.96, warmth: 0.10, highlights: 0.24, shadows: 0.28, vignette: 0.08, sharpness: 0.05))
+                            presetButton("Editorial", adjustments: .init(exposure: 0, brightness: 0, contrast: 1.16, saturation: 0.82, warmth: -0.08, highlights: 0.18, shadows: 0.08, vignette: 0.26, sharpness: 0.24))
+                        }
+                    }
+                    adjustmentSlider("Exposure", value: $draftAdjustments.exposure, range: -2...2)
+                    adjustmentSlider("Brightness", value: $draftAdjustments.brightness, range: -0.5...0.5)
+                    adjustmentSlider("Contrast", value: $draftAdjustments.contrast, range: 0.5...1.5)
+                    adjustmentSlider("Saturation", value: $draftAdjustments.saturation, range: 0...2)
+                    adjustmentSlider("Warmth", value: $draftAdjustments.warmth, range: -1...1)
+                    adjustmentSlider("Highlights", value: $draftAdjustments.highlights, range: 0...1)
+                    adjustmentSlider("Shadows", value: $draftAdjustments.shadows, range: -1...1)
+                    adjustmentSlider("Vignette", value: $draftAdjustments.vignette, range: 0...1)
+                    adjustmentSlider("Sharpness", value: $draftAdjustments.sharpness, range: 0...1)
+                    Button("Reset photo finishing", role: .destructive) { draftAdjustments = .default }
+                }
+                }
+                Section {
+                    Button("Restore appearance defaults", role: .destructive) { draft = .default }
+                }
+            }
+            .navigationTitle(isDecoration ? "Decoration appearance" : "Photo appearance")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Apply", action: apply).fontWeight(.bold) }
+            }
+        }
+    }
+
+    @ViewBuilder private var preview: some View {
+        let width: CGFloat = 260
+        let height: CGFloat = 180
+        ZStack {
+            RoundedRectangle(cornerRadius: 16).fill(TailorColor.paper)
+            if isDecoration {
+                MemoryBookElementMaskShape(mask: draft.mask, cornerRadius: draft.cornerRadiusRatio * 612)
+                    .fill(fillPreviewColor)
+                    .frame(width: width, height: height)
+                    .overlay {
+                        if draft.borderStyle != .none {
+                            MemoryBookElementMaskShape(mask: draft.mask, cornerRadius: draft.cornerRadiusRatio * 612)
+                                .stroke(Color(red: draft.borderColor.red, green: draft.borderColor.green, blue: draft.borderColor.blue), style: StrokeStyle(lineWidth: draft.borderWidthRatio * 612, dash: draft.borderStyle == .dashed ? [6, 4] : []))
+                        }
+                    }
+                    .shadow(color: .black.opacity(draft.shadowOpacity), radius: draft.shadowBlurRatio * 612, x: draft.shadowOffset.width * 612, y: draft.shadowOffset.height * 612)
+                    .opacity(draft.opacity)
+            } else if let identifier = photoIdentifier {
+                PhotoAssetThumbnail(identifier: identifier, adjustments: draftAdjustments)
+                    .frame(width: width, height: height)
+                    .scaleEffect(previewStraightenScale)
+                    .scaleEffect(x: draftTransformAdjustments.flipHorizontal ? -1 : 1, y: draftTransformAdjustments.flipVertical ? -1 : 1)
+                    .rotationEffect(.degrees(draftTransformAdjustments.straightenDegrees))
+                    .clipShape(MemoryBookElementMaskShape(mask: draft.mask, cornerRadius: draft.cornerRadiusRatio * 612))
+                    .overlay {
+                        if draft.borderStyle != .none {
+                            MemoryBookElementMaskShape(mask: draft.mask, cornerRadius: draft.cornerRadiusRatio * 612)
+                                .stroke(Color(red: draft.borderColor.red, green: draft.borderColor.green, blue: draft.borderColor.blue), style: StrokeStyle(lineWidth: draft.borderWidthRatio * 612, dash: draft.borderStyle == .dashed ? [6, 4] : []))
+                        }
+                    }
+                    .shadow(color: .black.opacity(draft.shadowOpacity), radius: draft.shadowBlurRatio * 612, x: draft.shadowOffset.width * 612, y: draft.shadowOffset.height * 612)
+                    .opacity(draft.opacity)
+            } else {
+                ContentUnavailableView("Photo unavailable", systemImage: "photo.badge.exclamationmark")
+            }
+        }
+        .frame(width: width + 36, height: height + 36)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Appearance preview")
+    }
+
+    private func valueSlider(_ title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>, percent: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(percent ? "\(Int((value.wrappedValue * 100).rounded()))%" : "\(Int((value.wrappedValue * 612).rounded())) pt")
+                    .foregroundStyle(TailorColor.secondaryInk)
+                    .monospacedDigit()
+            }
+            Slider(value: value, in: range)
+                .accessibilityIdentifier("Adjustment slider \(title)")
+        }
+    }
+
+    private func adjustmentSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(value.wrappedValue.formatted(.number.precision(.fractionLength(2)).sign(strategy: .always())))
+                    .foregroundStyle(TailorColor.secondaryInk)
+                    .monospacedDigit()
+            }
+            Slider(value: value, in: range)
+                .accessibilityIdentifier("Adjustment slider \(title)")
+        }
+    }
+
+    private func presetButton(_ title: String, adjustments: MemoryBookImageAdjustments) -> some View {
+        Button(title) { draftAdjustments = adjustments }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .accessibilityLabel("Photo preset \(title)")
+    }
+
+    private var borderColor: Binding<Color> {
+        Binding(
+            get: { Color(red: draft.borderColor.red, green: draft.borderColor.green, blue: draft.borderColor.blue) },
+            set: { value in
+                let color = UIColor(value)
+                var red: CGFloat = 0; var green: CGFloat = 0; var blue: CGFloat = 0; var alpha: CGFloat = 0
+                if color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                    draft.borderColor = .init(red: red, green: green, blue: blue)
+                }
+            }
+        )
+    }
+
+    private var fillColor: Binding<Color> {
+        Binding(
+            get: { fillPreviewColor },
+            set: { value in
+                let color = UIColor(value)
+                var red: CGFloat = 0; var green: CGFloat = 0; var blue: CGFloat = 0; var alpha: CGFloat = 0
+                if color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                    draft.fillColor = .init(red: red, green: green, blue: blue)
+                }
+            }
+        )
+    }
+
+    private var fillPreviewColor: Color {
+        let rgb = draft.fillColor ?? .init(red: 0.72, green: 0.29, blue: 0.17)
+        return Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    }
+
+    private var isDecoration: Bool { selectedElement?.kind == .shape }
+
+    private var previewStraightenScale: CGFloat {
+        guard selectedElement?.imageContentMode == .fill else { return 1 }
+        return FillCropConstraint(
+            sourceAspect: photoAspect,
+            containerAspect: 260 / 180,
+            rotationDegrees: draftTransformAdjustments.straightenDegrees
+        ).minimumScale
+    }
+
+    private var photoAspect: CGFloat {
+        guard let assetID = selectedElement?.assetID else { return 1 }
+        return book.photos.first(where: { $0.id == assetID })?.aspectRatio ?? 1
+    }
+
+    private var selectedElement: MemoryBookElement? {
+        book.pages.first(where: { $0.id == pageID })?.elements.first(where: { $0.id == elementID })
+    }
+
+    private var photoIdentifier: String? {
+        guard let assetID = book.pages.first(where: { $0.id == pageID })?.elements.first(where: { $0.id == elementID })?.assetID else { return nil }
+        return book.photos.first(where: { $0.id == assetID })?.assetLocalIdentifier
+    }
+
+    private func apply() {
+        guard let pageIndex = book.pages.firstIndex(where: { $0.id == pageID }),
+              let elementIndex = book.pages[pageIndex].elements.firstIndex(where: { $0.id == elementID }) else { dismiss(); return }
+        draft.normalize()
+        draftAdjustments.normalize()
+        draftTransformAdjustments.normalize()
+        guard book.pages[pageIndex].elements[elementIndex].appearance != draft
+                || book.pages[pageIndex].elements[elementIndex].imageAdjustments != draftAdjustments
+                || book.pages[pageIndex].elements[elementIndex].imageTransformAdjustments != draftTransformAdjustments
+        else { dismiss(); return }
+        recordHistory()
+        book.pages[pageIndex].elements[elementIndex].appearance = draft
+        book.pages[pageIndex].elements[elementIndex].imageAdjustments = draftAdjustments
+        book.pages[pageIndex].elements[elementIndex].imageTransformAdjustments = draftTransformAdjustments
+        let element = book.pages[pageIndex].elements[elementIndex]
+        _ = book.applyCrop(
+            pageID: pageID,
+            elementID: elementID,
+            scale: element.cropScale,
+            offset: element.cropOffset,
+            sourceAspect: photoAspect
+        )
+        book.pages[pageIndex].elements[elementIndex].origin = .user
+        book.pages[pageIndex].elements[elementIndex].updatedAt = .now
+        commit()
+        dismiss()
+    }
+
+    private func autoEnhance() {
+        guard let identifier = photoIdentifier else { return }
+        isAutoEnhancing = true
+        Task {
+            let image = await PhotoAssetImageLoader.image(identifier: identifier)
+            await MainActor.run {
+                if let image { draftAdjustments = MemoryBookImageProcessor.conservativeAutoEnhancement(for: image) }
+                isAutoEnhancing = false
+            }
+        }
     }
 }
 
@@ -1175,12 +2471,23 @@ private struct LayoutPickerSheet: View {
 /// and PDF renderer consume; it is not a second draft model.
 private func memoryBookTransformMarker(_ element: MemoryBookElement) -> String {
     return String(
-        format: "scale=%.3f;offsetX=%.3f;offsetY=%.3f;rotation=%.1f;z=%d",
+        format: "scale=%.3f;offsetX=%.3f;offsetY=%.3f;rotation=%.1f;z=%d;mask=%@;opacity=%.2f;border=%@;shadow=%.2f;ev=%.2f;contrast=%.2f;saturation=%.2f;warmth=%.2f;straighten=%.1f;flipH=%@;flipV=%@",
         Double(element.cropScale),
         Double(element.cropOffset.width),
         Double(element.cropOffset.height),
         Double(element.rotationDegrees),
-        element.zIndex
+        element.zIndex,
+        element.appearance.mask.rawValue,
+        element.appearance.opacity,
+        element.appearance.borderStyle.rawValue,
+        element.appearance.shadowOpacity,
+        element.imageAdjustments.exposure,
+        element.imageAdjustments.contrast,
+        element.imageAdjustments.saturation,
+        element.imageAdjustments.warmth,
+        element.imageTransformAdjustments.straightenDegrees,
+        element.imageTransformAdjustments.flipHorizontal ? "true" : "false",
+        element.imageTransformAdjustments.flipVertical ? "true" : "false"
     )
 }
 
@@ -1191,16 +2498,26 @@ private func memoryBookTextFrameMarker(_ element: MemoryBookElement, layout: Mem
     func normalized(_ rect: CGRect) -> String {
         String(format: "%.3f,%.3f,%.3f,%.3f", Double((rect.minX - paperRect.minX) / paperRect.width), Double((rect.minY - paperRect.minY) / paperRect.height), Double(rect.width / paperRect.width), Double(rect.height / paperRect.height))
     }
+    let color = element.textCustomColor.map { String(format: "custom(%.3f,%.3f,%.3f)", $0.red, $0.green, $0.blue) } ?? element.textColor.rawValue
     return String(
-        format: "x=%.3f;y=%.3f;width=%.3f;height=%.3f;z=%d;editable=%@;protected=%@",
+        format: "x=%.3f;y=%.3f;width=%.3f;height=%.3f;z=%d;alignment=%@;tracking=%.3f;lineHeight=%.3f;paragraph=%.3f;color=%@;editable=%@;protected=%@",
         Double(element.normalizedFrame.origin.x),
         Double(element.normalizedFrame.origin.y),
         Double(element.normalizedFrame.width),
         Double(element.normalizedFrame.height),
         element.zIndex,
+        element.textTypographyAdjustments.alignment.rawValue,
+        Double(element.textTypographyAdjustments.trackingEm),
+        Double(element.textTypographyAdjustments.lineHeightMultiple),
+        Double(element.textTypographyAdjustments.paragraphSpacingEm),
+        color,
         normalized(layout.spec.editableRect),
         layout.spec.protectedRects.map(normalized).joined(separator: "|")
     )
+}
+
+private func memoryBookNormalizedFrameMarker(_ frame: CGRect) -> String {
+    String(format: "x=%.4f;y=%.4f;width=%.4f;height=%.4f", Double(frame.minX), Double(frame.minY), Double(frame.width), Double(frame.height))
 }
 
 private struct CropEditorSheet: View {
@@ -1246,7 +2563,7 @@ private struct CropEditorSheet: View {
                             // a true overlay rather than a replacement black
                             // background, making landscape/portrait focus and
                             // the final rotation understandable.
-                            PhotoAssetThumbnail(identifier: target.photo.assetLocalIdentifier, treatment: MemoryBookPageStyle.resolve(book.pages[target.pageIndex].styleOverride ?? book.style).imageTreatment)
+                            PhotoAssetThumbnail(identifier: target.photo.assetLocalIdentifier, treatment: MemoryBookPageStyle.resolve(book.pages[target.pageIndex].styleOverride ?? book.style).imageTreatment, adjustments: target.element.imageAdjustments)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .clipped()
                             Color.black.opacity(0.72).ignoresSafeArea().allowsHitTesting(false)
@@ -1256,12 +2573,12 @@ private struct CropEditorSheet: View {
                                 cropScale: session.draftTransform.scale, cropOffset: session.draftTransform.offset,
                                 rotationDegrees: target.element.rotationDegrees, zIndex: target.element.zIndex,
                                 textStyle: target.element.textStyle, imageContentMode: target.element.imageContentMode,
-                                textFont: target.element.textFont, textColor: target.element.textColor, isLayoutLocked: target.element.isLayoutLocked,
+                                textFont: target.element.textFont, textColor: target.element.textColor, isLayoutLocked: target.element.isLayoutLocked, isInteractionLocked: target.element.isInteractionLocked, groupID: target.element.groupID, isHidden: target.element.isHidden, appearance: target.element.appearance, imageAdjustments: target.element.imageAdjustments, imageTransformAdjustments: target.element.imageTransformAdjustments,
                                 origin: target.element.origin
                             )
                             let geometry = MemoryBookImageTransformGeometry(container: frame, sourceAspect: target.photo.aspectRatio, element: draftElement)
                             MemoryBookImageTransform(geometry: geometry) {
-                                PhotoAssetThumbnail(identifier: target.photo.assetLocalIdentifier, treatment: MemoryBookPageStyle.resolve(book.pages[target.pageIndex].styleOverride ?? book.style).imageTreatment)
+                                PhotoAssetThumbnail(identifier: target.photo.assetLocalIdentifier, treatment: MemoryBookPageStyle.resolve(book.pages[target.pageIndex].styleOverride ?? book.style).imageTreatment, adjustments: target.element.imageAdjustments)
                             }
                                 .position(x: frame.midX, y: frame.midY)
                                 .accessibilityIdentifier("Crop image")
@@ -1386,7 +2703,15 @@ private struct CropEditorSheet: View {
     }
 
     private func apply() {
-        guard let target, let session, session.hasUncommittedChanges else { dismiss(); return }
+        guard let target, let session else { dismiss(); return }
+        // Done is also an explicit composition approval. An untouched
+        // automatic crop may have been opened from Book Check specifically so
+        // the user can confirm that the subject is framed acceptably; requiring
+        // a meaningless nudge would make that blocking issue impossible to
+        // resolve. Already-authored unchanged crops still dismiss without a
+        // redundant history entry.
+        let confirmsAutomaticCrop = target.element.origin == .automatic
+        guard session.hasUncommittedChanges || confirmsAutomaticCrop else { dismiss(); return }
         recordHistory()
         if book.applyCrop(pageID: pageID, elementID: elementID, scale: session.draftTransform.scale, offset: session.draftTransform.offset, sourceAspect: target.photo.aspectRatio) {
             commit()
@@ -1394,6 +2719,10 @@ private struct CropEditorSheet: View {
         exitState = .dismissed
         dismiss()
     }
+}
+
+private enum TextHierarchyPreset {
+    case editorialTitle, quietCaption, personalNote
 }
 
 private struct TextEditorSheet: View {
@@ -1411,6 +2740,7 @@ private struct TextEditorSheet: View {
     @State private var textFont: MemoryBookTextFont = .editorial
     @State private var textColor: MemoryBookTextColor = .ink
     @State private var textCustomColor: MemoryBookRGB?
+    @State private var typography = MemoryBookTextTypographyAdjustments.default
     @State private var field: MemoryBookTextField?
     @State private var baselineText = ""
     @State private var baselineStyle: MemoryBookTextStyle = .standard
@@ -1418,8 +2748,10 @@ private struct TextEditorSheet: View {
     @State private var baselineFont: MemoryBookTextFont = .editorial
     @State private var baselineColor: MemoryBookTextColor = .ink
     @State private var baselineCustomColor: MemoryBookRGB?
+    @State private var baselineTypography = MemoryBookTextTypographyAdjustments.default
     @State private var forceCreateFreeText = false
     @State private var confirmExit = false
+    @FocusState private var isTextInputFocused: Bool
 
     var body: some View {
         NavigationStack { Form {
@@ -1443,7 +2775,24 @@ private struct TextEditorSheet: View {
             }
             if let field {
                 Section(roleLabel(field)) {
-                TextEditor(text: $text).frame(minHeight: 150).accessibilityIdentifier("Text draft input")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        hierarchyPresetButton("Editorial title", preset: .editorialTitle)
+                        hierarchyPresetButton("Quiet caption", preset: .quietCaption)
+                        hierarchyPresetButton("Personal note", preset: .personalNote)
+                    }
+                }
+                Picker("Alignment", selection: $typography.alignment) {
+                    Label("Left", systemImage: "text.alignleft").tag(MemoryBookTextAlignment.leading)
+                    Label("Center", systemImage: "text.aligncenter").tag(MemoryBookTextAlignment.center)
+                    Label("Right", systemImage: "text.alignright").tag(MemoryBookTextAlignment.trailing)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("Text alignment")
+                TextEditor(text: $text)
+                    .focused($isTextInputFocused)
+                    .frame(minHeight: 150)
+                    .accessibilityIdentifier("Text draft input")
                 VStack(alignment: .leading, spacing: 6) {
                     HStack { Text("Text size"); Spacer(); Text("\(Int((textFontScale * 100).rounded()))%").foregroundStyle(TailorColor.secondaryInk) }
                     Slider(value: $textFontScale, in: 0.5...2.4, step: 0.05)
@@ -1459,10 +2808,16 @@ private struct TextEditorSheet: View {
                     .accessibilityIdentifier("Text color")
                 Text("Use your own words. Tailor will not invent a story for you.").font(.caption).foregroundStyle(TailorColor.secondaryInk)
                 }
+                Section("Typography") {
+                    typographySlider("Tracking", value: $typography.trackingEm, range: -0.05...0.20, format: { String(format: "%+.2f em", $0) })
+                    typographySlider("Line height", value: $typography.lineHeightMultiple, range: 0.90...2, format: { String(format: "%.2f×", $0) })
+                    typographySlider("Paragraph spacing", value: $typography.paragraphSpacingEm, range: 0...1.5, format: { String(format: "%.2f em", $0) })
+                    Button("Reset typography", role: .destructive) { typography = .default }
+                }
             }
         }
             .safeAreaInset(edge: .bottom, spacing: 0) { editorStatusBar }
-            .navigationTitle("Edit text").onAppear(perform: load).onChange(of: text) { _, _ in updateHighlight() }.onChange(of: textStyle) { _, _ in updateHighlight() }.onChange(of: textFontScale) { _, _ in updateHighlight() }.scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Edit text").onAppear(perform: load).onChange(of: text) { _, _ in updateHighlight() }.onChange(of: textStyle) { _, _ in updateHighlight() }.onChange(of: textFontScale) { _, _ in updateHighlight() }.onChange(of: typography) { _, _ in updateHighlight() }.scrollDismissesKeyboard(.interactively)
             .interactiveDismissDisabled(isDirty)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { if save() { draftHighlight = nil; dismiss() } }.accessibilityIdentifier("Text draft done") }; ToolbarItem(placement: .cancellationAction) { Button("Back") { if isDirty { confirmExit = true } else { dismiss() } }.accessibilityIdentifier("Text draft back") } }
             .confirmationDialog("Keep this text draft?", isPresented: $confirmExit) {
@@ -1470,7 +2825,7 @@ private struct TextEditorSheet: View {
                     .accessibilityIdentifier("Text draft keep editing")
                 Button("Save") { if save() { draftHighlight = nil; dismiss() } }
                     .accessibilityIdentifier("Text draft save")
-                Button("Discard", role: .destructive) { text = baselineText; textStyle = baselineStyle; textFontScale = baselineFontScale; textFont = baselineFont; textColor = baselineColor; textCustomColor = baselineCustomColor; draftHighlight = nil; dismiss() }
+                Button("Discard", role: .destructive) { text = baselineText; textStyle = baselineStyle; textFontScale = baselineFontScale; textFont = baselineFont; textColor = baselineColor; textCustomColor = baselineCustomColor; typography = baselineTypography; draftHighlight = nil; dismiss() }
                     .accessibilityIdentifier("Text draft discard")
             } message: { Text("Invalid text cannot be saved and stays in the editor.") }
         }
@@ -1492,8 +2847,26 @@ private struct TextEditorSheet: View {
     }
     private var existingFields: [MemoryBookTextField] { guard let page else { return [] }; return page.elements.compactMap(\.textField).filter { $0.isAllowed(on: page.kind) } }
     private var addableFields: [MemoryBookTextField] { guard let page else { return [] }; return MemoryBookBuilder.optionalTextFields(for: page.kind).filter { !existingFields.contains($0) } }
-    private var validation: MemoryBookTextDraftValidation? { guard let page, let field else { return nil }; let e = selectedTextElement; return book.textDraftValidation(text: text, style: textStyle, fontScale: textFontScale, normalizedFrame: e?.normalizedFrame ?? MemoryBookBuilder.defaultTextFrame(for: field), on: page, zIndex: e?.zIndex ?? 9, field: field) }
-    private var isDirty: Bool { text != baselineText || textStyle != baselineStyle || textFontScale != baselineFontScale || textFont != baselineFont || textColor != baselineColor || textCustomColor != baselineCustomColor }
+    private var validation: MemoryBookTextDraftValidation? { guard let page, let field else { return nil }; let e = selectedTextElement; return book.textDraftValidation(text: text, style: textStyle, fontScale: textFontScale, typography: typography, normalizedFrame: e?.normalizedFrame ?? MemoryBookBuilder.defaultTextFrame(for: field), on: page, zIndex: e?.zIndex ?? 9, field: field) }
+    private var readability: MemoryBookTextReadabilityAssessment? {
+        guard let page, let field else { return nil }
+        let element = selectedTextElement
+        return book.textReadability(
+            style: textStyle,
+            fontScale: textFontScale,
+            color: textColor,
+            customColor: textCustomColor,
+            normalizedFrame: element?.normalizedFrame ?? MemoryBookBuilder.defaultTextFrame(for: field),
+            on: page,
+            zIndex: element?.zIndex ?? 9,
+            field: field
+        )
+    }
+    private var isDirty: Bool { text != baselineText || textStyle != baselineStyle || textFontScale != baselineFontScale || textFont != baselineFont || textColor != baselineColor || textCustomColor != baselineCustomColor || typography != baselineTypography }
+    private var shouldWarnAboutContrast: Bool {
+        guard let page, let readability else { return false }
+        return !readability.hasSufficientContrast && (page.backgroundColor != nil || textCustomColor != nil || textColor != .ink)
+    }
     private var nativeTextColor: Binding<Color> {
         Binding(
             get: {
@@ -1507,6 +2880,47 @@ private struct TextEditorSheet: View {
                 textCustomColor = .init(red: Double(red), green: Double(green), blue: Double(blue))
             }
         )
+    }
+    @ViewBuilder private func typographySlider(
+        _ title: String,
+        value: Binding<CGFloat>,
+        range: ClosedRange<CGFloat>,
+        format: @escaping (CGFloat) -> String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(format(value.wrappedValue)).foregroundStyle(TailorColor.secondaryInk)
+            }
+            Slider(value: value, in: range)
+                .accessibilityIdentifier("Text typography \(title)")
+                .accessibilityValue(format(value.wrappedValue))
+        }
+    }
+    private func applyTypographyPreset(_ preset: TextHierarchyPreset) {
+        switch preset {
+        case .editorialTitle:
+            textStyle = .large
+            textFontScale = 1.10
+            textFont = .editorial
+            typography = .init(alignment: .leading, trackingEm: 0.01, lineHeightMultiple: 1.08, paragraphSpacingEm: 0.20)
+        case .quietCaption:
+            textStyle = .small
+            textFontScale = 0.95
+            textFont = .quietSans
+            typography = .init(alignment: .leading, trackingEm: 0.02, lineHeightMultiple: 1.35, paragraphSpacingEm: 0.35)
+        case .personalNote:
+            textStyle = .standard
+            textFontScale = 1
+            textFont = .handwritten
+            typography = .init(alignment: .leading, trackingEm: 0, lineHeightMultiple: 1.42, paragraphSpacingEm: 0.45)
+        }
+    }
+    private func hierarchyPresetButton(_ title: String, preset: TextHierarchyPreset) -> some View {
+        Button(title) { applyTypographyPreset(preset) }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("Text preset \(title)")
     }
     private func roleLabel(_ role: MemoryBookTextField) -> String { role.rawValue.replacingOccurrences(of: "([A-Z])", with: " $1", options: .regularExpression).capitalized }
     private func load() {
@@ -1530,17 +2944,23 @@ private struct TextEditorSheet: View {
         textFont = target?.textFont ?? .editorial
         textColor = target?.textColor ?? .ink
         textCustomColor = target?.textCustomColor
-        baselineText = text; baselineStyle = textStyle; baselineFontScale = textFontScale; baselineFont = textFont; baselineColor = textColor; baselineCustomColor = textCustomColor
+        typography = target?.textTypographyAdjustments ?? .default
+        baselineText = text; baselineStyle = textStyle; baselineFontScale = textFontScale; baselineFont = textFont; baselineColor = textColor; baselineCustomColor = textCustomColor; baselineTypography = typography
         updateHighlight()
+        focusTextInput()
     }
-    private func create(_ role: MemoryBookTextField) { forceCreateFreeText = false; field = role; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; updateHighlight() }
+    private func create(_ role: MemoryBookTextField) { forceCreateFreeText = false; field = role; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; typography = .default; baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; baselineTypography = .default; updateHighlight(); focusTextInput() }
     private func createFreeText() {
         // A free note is not tied to an existing semantic field.  Deferring
         // insertion until Save means Back/Discard leaves no empty ghost layer.
         forceCreateFreeText = true
-        field = .legacyUserNote; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil
-        baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil
+        field = .legacyUserNote; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; typography = .default
+        baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; baselineTypography = .default
         draftHighlight = nil
+        focusTextInput()
+    }
+    private func focusTextInput() {
+        DispatchQueue.main.async { isTextInputFocused = true }
     }
     private func save() -> Bool {
         guard let page, let field, let validation, validation.isValid, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -1553,20 +2973,25 @@ private struct TextEditorSheet: View {
             book.pages[pageIndex].elements[index].textFont = textFont
             book.pages[pageIndex].elements[index].textColor = textColor
             book.pages[pageIndex].elements[index].textCustomColor = textCustomColor
+            book.pages[pageIndex].elements[index].textTypographyAdjustments = typography
             book.pages[pageIndex].elements[index].textField = field
             book.pages[pageIndex].elements[index].origin = .user
         } else {
             let topLayer = (book.pages[pageIndex].elements.map(\.zIndex).max() ?? 9) + 1
-            book.pages[pageIndex].elements.append(MemoryBookElement(kind: .text, text: text, normalizedFrame: MemoryBookBuilder.defaultTextFrame(for: field), zIndex: topLayer, textStyle: textStyle, textFontScale: textFontScale, textFont: textFont, textColor: textColor, textCustomColor: textCustomColor, textField: field, isLayoutLocked: true, origin: .user))
+            book.pages[pageIndex].elements.append(MemoryBookElement(kind: .text, text: text, normalizedFrame: MemoryBookBuilder.defaultTextFrame(for: field), zIndex: topLayer, textStyle: textStyle, textFontScale: textFontScale, textFont: textFont, textColor: textColor, textCustomColor: textCustomColor, textTypographyAdjustments: typography, textField: field, isLayoutLocked: true, origin: .user))
         }
         forceCreateFreeText = false
-        commit(); baselineText = text; baselineStyle = textStyle; baselineFontScale = textFontScale; baselineFont = textFont; baselineColor = textColor; baselineCustomColor = textCustomColor; updateHighlight(); return true
+        commit(); baselineText = text; baselineStyle = textStyle; baselineFontScale = textFontScale; baselineFont = textFont; baselineColor = textColor; baselineCustomColor = textCustomColor; baselineTypography = typography; updateHighlight(); return true
     }
     private func fitText() {
         guard let page, let field, let element = selectedTextElement else { return }
         let candidates: [MemoryBookTextStyle] = textStyle == .large ? [.standard, .small] : (textStyle == .standard ? [.small] : [])
-        guard let style = candidates.first(where: { book.textDraftValidation(text: text, style: $0, fontScale: textFontScale, normalizedFrame: element.normalizedFrame, on: page, zIndex: element.zIndex, field: field).isValid }) else { updateHighlight(); return }
+        guard let style = candidates.first(where: { book.textDraftValidation(text: text, style: $0, fontScale: textFontScale, typography: typography, normalizedFrame: element.normalizedFrame, on: page, zIndex: element.zIndex, field: field).isValid }) else { updateHighlight(); return }
         textStyle = style; _ = save()
+    }
+    private func useReadableColor() {
+        guard let readability else { return }
+        textCustomColor = readability.recommendedForeground
     }
     private func updateHighlight() { guard let page, let e = selectedTextElement, let validation else { draftHighlight = nil; return }; draftHighlight = .init(pageID: page.id, elementID: e.id, isInvalid: !validation.isValid) }
 
@@ -1584,6 +3009,13 @@ private struct TextEditorSheet: View {
                         .accessibilityIdentifier("Text character count")
                         .accessibilityValue("\(validation.characterCount)/\(validation.characterLimit)")
                     Spacer()
+                    if let readability {
+                        Text(String(format: "%.0f pt · %.1f:1", readability.fontSize, readability.contrastRatio))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(shouldWarnAboutContrast ? .orange : TailorColor.secondaryInk)
+                            .accessibilityIdentifier("Text print readability")
+                            .accessibilityValue(String(format: "%.0f point text, %.1f to 1 contrast", readability.fontSize, readability.contrastRatio))
+                    }
                 }
                 if !validation.isValid {
                     HStack(alignment: .top, spacing: 8) {
@@ -1607,6 +3039,26 @@ private struct TextEditorSheet: View {
                         .accessibilityIdentifier("Fit text")
                         .accessibilityLabel("Fit text")
                 }
+                if let readability, shouldWarnAboutContrast {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "circle.lefthalf.filled").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(String(format: "Low text contrast (%.1f:1)", readability.contrastRatio))
+                                .font(.footnote.weight(.semibold))
+                                .accessibilityIdentifier("Text contrast warning")
+                            Text("The color may fade into this page when printed. You can keep it, or use Tailor's coordinated readable color.")
+                                .font(.caption)
+                            Button("Use readable color", action: useReadableColor)
+                                .font(.footnote.weight(.bold))
+                                .buttonStyle(.borderedProminent)
+                                .tint(.orange)
+                                .foregroundStyle(.white)
+                                .accessibilityIdentifier("Use readable text color")
+                                .accessibilityLabel("Use readable text color")
+                        }
+                    }
+                    .foregroundStyle(.orange)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
@@ -1624,8 +3076,175 @@ private struct StylePickerSheet: View {
     let selectedPageID: UUID?
     let recordHistory: () -> Void
     let commit: () -> Void
-    var body: some View { NavigationStack { List { Section("Apply to entire book") { ForEach(AlbumStyle.allCases, id: \.self) { style in Button { recordHistory(); book.style = style; book.profile.albumStyle = style; commit(); dismiss() } label: { HStack { Text(style.label); Spacer(); if book.style == style { Image(systemName: "checkmark") } }.foregroundStyle(TailorColor.ink) } } }; Section("This page") { Button("Use book style") { override(nil) }; ForEach(AlbumStyle.allCases, id: \.self) { style in Button(style.label) { override(style) } } } }.navigationTitle("Style") } }
+    @State private var showBackgroundEditor = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Apply to entire book") {
+                    ForEach(AlbumStyle.allCases, id: \.self) { style in
+                        Button {
+                            recordHistory(); book.style = style; book.profile.albumStyle = style; commit(); dismiss()
+                        } label: {
+                            HStack { Text(style.label); Spacer(); if book.style == style { Image(systemName: "checkmark") } }
+                                .foregroundStyle(TailorColor.ink)
+                        }
+                    }
+                }
+                Section("This page") {
+                    Button("Customize background", systemImage: "paintbrush.pointed") { showBackgroundEditor = true }
+                        .disabled(selectedPageID == nil)
+                    Button("Use book style") { override(nil) }
+                    ForEach(AlbumStyle.allCases, id: \.self) { style in Button(style.label) { override(style) } }
+                }
+                if chapterPageIDs.count > 1 {
+                    Section("This chapter") {
+                        Text("Applies the coordinated style to unlocked pages only. Custom backgrounds, crops, text and locked pages stay unchanged.")
+                            .font(.caption)
+                            .foregroundStyle(TailorColor.secondaryInk)
+                        ForEach(AlbumStyle.allCases, id: \.self) { style in
+                            Button("Apply \(style.label) to chapter") { overrideChapter(style) }
+                                .accessibilityIdentifier("Apply chapter style \(style.rawValue)")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Style")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .sheet(isPresented: $showBackgroundEditor) {
+                if let selectedPageID {
+                    PageBackgroundEditorSheet(
+                        book: $book,
+                        pageID: selectedPageID,
+                        recordHistory: recordHistory,
+                        commit: commit
+                    )
+                }
+            }
+        }
+    }
     private func override(_ style: AlbumStyle?) { guard let index = book.pages.firstIndex(where: { $0.id == selectedPageID }) else { return }; recordHistory(); book.pages[index].styleOverride = style; commit(); dismiss() }
+    private var chapterPageIDs: Set<UUID> {
+        guard let selected = book.pages.first(where: { $0.id == selectedPageID }), let chapterID = selected.chapterID else { return [] }
+        return Set(book.pages.filter { $0.chapterID == chapterID }.map(\.id))
+    }
+    private func overrideChapter(_ style: AlbumStyle) {
+        var updated = book
+        guard updated.applyStyleOverride(style, to: chapterPageIDs) > 0 else { dismiss(); return }
+        recordHistory()
+        book = updated
+        commit()
+        dismiss()
+    }
+}
+
+private struct PageBackgroundEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var book: MemoryBookDocument
+    let pageID: UUID
+    let recordHistory: () -> Void
+    let commit: () -> Void
+    @State private var draft: MemoryBookRGB?
+
+    init(book: Binding<MemoryBookDocument>, pageID: UUID, recordHistory: @escaping () -> Void, commit: @escaping () -> Void) {
+        _book = book
+        self.pageID = pageID
+        self.recordHistory = recordHistory
+        self.commit = commit
+        _draft = State(initialValue: book.wrappedValue.pages.first(where: { $0.id == pageID })?.backgroundColor)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(previewColor)
+                        .overlay {
+                            VStack(spacing: 8) {
+                                Text("A page to remember").font(.system(.title2, design: .serif)).foregroundStyle(previewInk)
+                                Text("Preview with the current style").font(.caption).foregroundStyle(previewInk.opacity(0.68))
+                            }
+                        }
+                        .frame(height: 190)
+                        .shadow(color: .black.opacity(0.10), radius: 12, y: 6)
+                        .accessibilityIdentifier("Page background preview")
+                }
+                Section("Curated backgrounds") {
+                    backgroundButton("Style original", color: nil)
+                    backgroundButton("Warm ivory", color: .init(red: 0.97, green: 0.93, blue: 0.84))
+                    backgroundButton("Soft blush", color: .init(red: 0.95, green: 0.86, blue: 0.82))
+                    backgroundButton("Quiet sage", color: .init(red: 0.82, green: 0.87, blue: 0.78))
+                }
+                Section("Custom") {
+                    ColorPicker("Background color", selection: customColor, supportsOpacity: false)
+                        .accessibilityIdentifier("Page background color")
+                    Text("Tailor keeps the current style's typography and texture. Review contrast in the preview before applying.")
+                        .font(.caption)
+                        .foregroundStyle(TailorColor.secondaryInk)
+                }
+            }
+            .navigationTitle("Page background")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Apply", action: apply).fontWeight(.bold) }
+            }
+        }
+    }
+
+    private var style: MemoryBookPageStyle {
+        guard let page = book.pages.first(where: { $0.id == pageID }) else { return .resolve(book.style) }
+        return .resolve(page.styleOverride ?? book.style)
+    }
+
+    private var previewColor: Color {
+        let color = draft ?? style.paper
+        return Color(red: color.red, green: color.green, blue: color.blue)
+    }
+
+    private var previewInk: Color {
+        let ink = style.ink
+        return Color(red: ink.red, green: ink.green, blue: ink.blue)
+    }
+
+    private var customColor: Binding<Color> {
+        Binding(
+            get: { previewColor },
+            set: { value in
+                let color = UIColor(value)
+                var red: CGFloat = 0; var green: CGFloat = 0; var blue: CGFloat = 0; var alpha: CGFloat = 0
+                if color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) {
+                    draft = .init(red: red, green: green, blue: blue)
+                }
+            }
+        )
+    }
+
+    private func backgroundButton(_ title: String, color: MemoryBookRGB?) -> some View {
+        Button {
+            draft = color
+        } label: {
+            HStack {
+                Circle()
+                    .fill(Color(red: (color ?? style.paper).red, green: (color ?? style.paper).green, blue: (color ?? style.paper).blue))
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().stroke(TailorColor.secondaryInk.opacity(0.25)))
+                Text(title)
+                Spacer()
+                if draft == color { Image(systemName: "checkmark.circle.fill").foregroundStyle(TailorColor.clay) }
+            }
+        }
+        .accessibilityIdentifier("Background preset \(title)")
+    }
+
+    private func apply() {
+        guard let index = book.pages.firstIndex(where: { $0.id == pageID }), book.pages[index].backgroundColor != draft else { dismiss(); return }
+        recordHistory()
+        book.pages[index].backgroundColor = draft
+        commit()
+        dismiss()
+    }
 }
 
 private struct BookCheckSheet: View {
@@ -1633,12 +3252,61 @@ private struct BookCheckSheet: View {
     @Binding var book: MemoryBookDocument
     let assetIsAvailable: (ArchivePhoto) -> Bool
     let selectIssue: (MemoryBookIssue) -> Void
+    let recordHistory: () -> Void
+    let commit: () -> Void
     private var issues: [MemoryBookIssue] { book.checkBook(assetIsAvailable: assetIsAvailable) }
-    var body: some View { NavigationStack { List { if issues.isEmpty { ContentUnavailableView("Your book is ready to preview", systemImage: "checkmark.seal") } else { ForEach(issues) { issue in HStack(alignment: .top) { Image(systemName: issue.severity == .blocking ? "exclamationmark.triangle.fill" : "lightbulb").foregroundStyle(issue.severity == .blocking ? .red : TailorColor.clay); VStack(alignment: .leading) { Text(issue.severity == .blocking ? "Needs attention" : "Suggestion").font(.caption.weight(.bold)); Text(issue.message) }; Spacer(); if issue.pageID != nil { Button(issue.field == nil ? "Go" : "Go to text field") { selectIssue(issue) }.accessibilityIdentifier("Book check go \(issue.field?.rawValue ?? "page")").accessibilityLabel(issue.field.map { "Go to \($0.rawValue) text field" } ?? "Go") } } } } }.navigationTitle("Book check").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } } } }
+    var body: some View {
+        NavigationStack {
+            List {
+                if issues.isEmpty {
+                    ContentUnavailableView("Your book is ready to preview", systemImage: "checkmark.seal")
+                } else {
+                    ForEach(issues) { issue in
+                        HStack(alignment: .top) {
+                            Image(systemName: issue.severity == .blocking ? "exclamationmark.triangle.fill" : "lightbulb")
+                                .foregroundStyle(issue.severity == .blocking ? .red : TailorColor.clay)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(issue.severity == .blocking ? "Needs attention" : "Suggestion").font(.caption.weight(.bold))
+                                Text(issue.message)
+                                HStack {
+                                    if let repair = issue.repair {
+                                        Button(repair.actionLabel) { applyRepair(issue) }
+                                            .buttonStyle(.borderedProminent)
+                                            .tint(TailorColor.clay)
+                                            .accessibilityIdentifier("Book check fix \(repair.actionLabel) \(issue.field?.rawValue ?? issue.elementID?.uuidString ?? "document")")
+                                    }
+                                    if issue.pageID != nil {
+                                        Button(issue.field == nil ? "Go" : "Go to text field") { selectIssue(issue) }
+                                            .buttonStyle(.bordered)
+                                            .accessibilityIdentifier("Book check go \(issue.field?.rawValue ?? issue.elementID?.uuidString ?? "page")")
+                                            .accessibilityLabel(issue.field.map { "Go to \($0.rawValue) text field" } ?? "Go: \(issue.message)")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Book check")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    private func applyRepair(_ issue: MemoryBookIssue) {
+        var updated = book
+        guard updated.applyBookCheckRepair(issue) else { return }
+        recordHistory()
+        book = updated
+        commit()
+    }
 }
 
 private extension AlbumStyle {
     var label: String { switch self { case .warmPaper: "Warm Paper"; case .quietNight: "Quiet Night"; case .fieldNotes: "Field Notes"; case .cinema: "Cinema"; case .filmAlbum: "Film Album" } }
+}
+
+private func memoryBookColorMarker(_ color: MemoryBookRGB) -> String {
+    String(format: "red=%.3f;green=%.3f;blue=%.3f", color.red, color.green, color.blue)
 }
 
 struct PreviewFeatureView: View {
@@ -1720,6 +3388,20 @@ struct PreviewFeatureView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
                 .background(.ultraThinMaterial)
+                if !purchased {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Every preview page is watermarked.", systemImage: "drop.triangle")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(TailorColor.ink)
+                        Text("Your book remains fully editable until you unlock the complete album.")
+                            .font(.caption)
+                            .foregroundStyle(TailorColor.secondaryInk)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(TailorColor.elevated)
+                }
             }
         }
         .sheet(isPresented: $showCustomization) {
