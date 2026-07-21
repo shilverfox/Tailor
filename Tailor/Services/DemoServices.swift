@@ -3,8 +3,13 @@ import Foundation
 actor InMemoryArchiveRepository: ArchiveRepository {
     private var documents: [UUID: ArchiveDocument] = [:]
     func save(profile: PetProfile) async throws {
-        let existing = documents[profile.id]
-        documents[profile.id] = ArchiveDocument(profile: profile, photos: existing?.photos ?? [], chapters: existing?.chapters ?? [])
+        if var existing = documents[profile.id] {
+            existing.profile = profile
+            existing.updatedAt = .now
+            documents[profile.id] = existing
+        } else {
+            documents[profile.id] = ArchiveDocument(profile: profile)
+        }
     }
     func profile(id: UUID) async throws -> PetProfile? { documents[id]?.profile }
     func allProfiles() async throws -> [PetProfile] { documents.values.map(\.profile).sorted { $0.name < $1.name } }
@@ -17,13 +22,29 @@ struct DemoPetScanService: PetScanServicing {
     func scan(profile: PetProfile) async throws -> [ArchivePhoto] {
         try await Task.sleep(for: .milliseconds(250))
         return (0..<3).map { index in
-            ArchivePhoto(id: UUID(), assetLocalIdentifier: "demo-\(index)", decision: index == 0 ? .selected : .needsReview, confidence: 0.96 - Double(index) * 0.18, createdAt: .now)
+            ArchivePhoto(id: UUID(), assetLocalIdentifier: "demo-\(index)", decision: index == 0 ? .selected : .pending, confidence: 0.96 - Double(index) * 0.18, createdAt: .now)
         }
     }
 }
 
 actor DemoPurchaseService: PurchaseServicing {
     private var entitled = false
+    #if DEBUG
+    private var priceRequestCount = 0
+    #endif
+    func unlockDisplayPrice() async -> String? {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        let state = arguments.firstIndex(of: "-uiDemoState").flatMap { index in
+            arguments.indices.contains(index + 1) ? arguments[index + 1] : nil
+        }
+        if arguments.contains("-uiTesting"), state == "purchase-price-retry" {
+            priceRequestCount += 1
+            if priceRequestCount == 1 { return nil }
+        }
+        #endif
+        return Locale.current.currency?.identifier == "CNY" ? "¥148.00" : "$19.99"
+    }
     func purchaseUnlock() async throws -> PurchaseState {
         let arguments = ProcessInfo.processInfo.arguments
         let state = arguments.firstIndex(of: "-uiDemoState").flatMap { index in

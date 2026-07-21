@@ -25,6 +25,7 @@ struct UnavailableProductionScanner: PetScanServicing {
 }
 
 struct UnavailableProductionPurchase: PurchaseServicing {
+    func unlockDisplayPrice() async -> String? { nil }
     func purchaseUnlock() async throws -> PurchaseState { throw ProductionStorageUnavailableError.unavailable }
     func restorePurchases() async throws -> PurchaseState { throw ProductionStorageUnavailableError.unavailable }
     func isEntitled() async -> Bool { false }

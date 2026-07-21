@@ -1,0 +1,1183 @@
+{
+  "papers": {
+    "a4": [
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.7150292778139232,
+          "readerToPDF": 0.5817715841742752
+        },
+        "elements": [
+          {
+            "id": "E8556AB2-F83A-4862-BFED-815041B0CD6D",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501292516,
+            "pdfDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              533.5012919896641,
+              558.2659380692168
+            ],
+            "readerDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              534.2700258397933,
+              558.2659380692168
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "2A572DC9-3B2A-48D3-B1AA-A05F7B7EBAEF",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "A843DE6A-FE64-4A06-A53F-B2A4B6C78E8E",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 23.005464480874323,
+            "pdfDetectedBoxPoints": [
+              63.036175710594314,
+              90.48816029143897,
+              113.00387596899225,
+              108.1256830601093
+            ],
+            "readerDetectedBoxPoints": [
+              63.036175710594314,
+              112.72677595628416,
+              113.00387596899225,
+              131.13114754098362
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 23.005464480874323,
+        "meanAbsolutePixelDifference": 1.3879679441452026,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-01.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-01.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 8.816510525662695
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.3395008940371608,
+          "readerToPDF": 0.35322734775432196
+        },
+        "elements": [
+          {
+            "id": "F6613660-D380-4F35-B7E9-D170618AF159",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 40.64298724954466,
+            "pdfDetectedBoxPoints": [
+              86.09819121447029,
+              323.61020036429875,
+              398.2041343669251,
+              411.0309653916211
+            ],
+            "readerDetectedBoxPoints": [
+              86.09819121447029,
+              364.25318761384335,
+              400.51033591731266,
+              451.6739526411658
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 11
+          },
+          {
+            "id": "9A535FB9-1BE1-4CD6-BFFC-8D7374353060",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 19.938069216757725,
+            "pdfDetectedBoxPoints": [
+              86.09819121447029,
+              188.6448087431694,
+              202.17700258397932,
+              210.88342440801458
+            ],
+            "readerDetectedBoxPoints": [
+              86.86692506459949,
+              207.816029143898,
+              202.17700258397932,
+              230.8214936247723
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 12
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 40.64298724954466,
+        "meanAbsolutePixelDifference": 4.265738010406494,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-02.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-02.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 23.03010380246567
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.07297803963577933,
+          "readerToPDF": 0.041438686836176374
+        },
+        "elements": [
+          {
+            "id": "AE25290E-4216-415C-BE12-E329386B78B8",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 85.88706739526407,
+            "pdfDetectedBoxPoints": [
+              86.09819121447029,
+              266.8633879781421,
+              274.43798449612405,
+              361.1857923497268
+            ],
+            "readerDetectedBoxPoints": [
+              86.86692506459949,
+              352.75045537340617,
+              275.97545219638243,
+              446.30601092896177
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 11
+          },
+          {
+            "id": "D61A1614-2C5C-4C3C-AC42-442BAF6504B8",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 15.336976320582878,
+            "pdfDetectedBoxPoints": [
+              75.3359173126615,
+              108.89253187613843,
+              197.56459948320415,
+              130.36429872495447
+            ],
+            "readerDetectedBoxPoints": [
+              75.3359173126615,
+              124.22950819672131,
+              196.79586563307492,
+              145.70127504553733
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 12
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 85.88706739526407,
+        "meanAbsolutePixelDifference": 6.3560991287231445,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-03.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-03.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 24.872272591133612
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.567682830516506,
+          "readerToPDF": 0.5338153336345836
+        },
+        "elements": [
+          {
+            "id": "30D40A22-1D7F-4F25-B7BD-80412F0556E0",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501292516,
+            "pdfDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              533.5012919896641,
+              558.2659380692168
+            ],
+            "readerDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              534.2700258397933,
+              558.2659380692168
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "12BED613-24F4-4602-92CF-8C11EF9301BC",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "A556C644-DBED-4740-9750-D2898EA84BBE",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 23.005464480874323,
+            "pdfDetectedBoxPoints": [
+              64.57364341085271,
+              90.48816029143897,
+              218.32041343669252,
+              114.26047358834244
+            ],
+            "readerDetectedBoxPoints": [
+              63.804909560723516,
+              112.72677595628416,
+              218.32041343669252,
+              137.26593806921676
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 23.005464480874323,
+        "meanAbsolutePixelDifference": 1.601082682609558,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-04.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-04.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 11.106164653495233
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.5822982987162092,
+          "readerToPDF": 0.4098022678286946
+        },
+        "elements": [
+          {
+            "id": "4816F189-8F3E-4159-BC37-4ED50FF7B633",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7668488160291531,
+            "pdfDetectedBoxPoints": [
+              62.26744186046512,
+              263.02914389799633,
+              292.88759689922483,
+              393.39344262295083
+            ],
+            "readerDetectedBoxPoints": [
+              62.26744186046512,
+              263.7959927140255,
+              292.88759689922483,
+              392.6265938069217
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "4D0F225D-80AF-486A-A66D-C276DCF39B6A",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501291947,
+            "pdfDetectedBoxPoints": [
+              365.9173126614987,
+              437.10382513661204,
+              471.23385012919897,
+              622.6812386156648
+            ],
+            "readerDetectedBoxPoints": [
+              366.6860465116279,
+              437.10382513661204,
+              471.23385012919897,
+              622.6812386156648
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "68C18D98-C8E5-4427-AC77-781838C4B19F",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501292516,
+            "pdfDetectedBoxPoints": [
+              62.26744186046512,
+              464.7103825136612,
+              292.1188630490956,
+              595.0746812386157
+            ],
+            "readerDetectedBoxPoints": [
+              62.26744186046512,
+              465.47723132969037,
+              292.88759689922483,
+              594.3078324225866
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "697BAB76-6610-4F4F-9629-048C52DA5BEE",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501291947,
+            "pdfDetectedBoxPoints": [
+              365.9173126614987,
+              235.42258652094716,
+              471.23385012919897,
+              421.0
+            ],
+            "readerDetectedBoxPoints": [
+              366.6860465116279,
+              235.42258652094716,
+              471.23385012919897,
+              421.0
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "027FB783-99AE-4C1E-BB6B-8D8A4161FDE6",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "489095D1-2479-4236-AB48-97F36A3D8A6B",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 23.005464480874323,
+            "pdfDetectedBoxPoints": [
+              63.036175710594314,
+              89.72131147540983,
+              252.91343669250645,
+              108.1256830601093
+            ],
+            "readerDetectedBoxPoints": [
+              63.804909560723516,
+              112.72677595628416,
+              254.45090439276487,
+              131.13114754098362
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 23.005464480874323,
+        "meanAbsolutePixelDifference": 2.1928956508636475,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-05.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-05.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 13.21436339837883
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.628014440433213,
+          "readerToPDF": 0.4585119798234552
+        },
+        "elements": [
+          {
+            "id": "153C8832-CFCD-492E-8420-8A9B04D96BFE",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7687338501292516,
+            "pdfDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              533.5012919896641,
+              558.2659380692168
+            ],
+            "readerDetectedBoxPoints": [
+              62.26744186046512,
+              235.42258652094716,
+              534.2700258397933,
+              558.2659380692168
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "9C88BFA4-A11E-4836-A394-8A5F1BE6E0CE",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "C559085A-506D-400D-92BB-EAC1D630BD37",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 23.005464480874323,
+            "pdfDetectedBoxPoints": [
+              63.804909560723516,
+              91.25500910746813,
+              116.84754521963825,
+              108.1256830601093
+            ],
+            "readerDetectedBoxPoints": [
+              63.036175710594314,
+              113.4936247723133,
+              117.61627906976744,
+              131.13114754098362
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 23.005464480874323,
+        "meanAbsolutePixelDifference": 1.59553861618042,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-06.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-06.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 9.913524568000604
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.027348643006263048,
+          "readerToPDF": 0.021974306964164976
+        },
+        "elements": [
+          {
+            "id": "259A7DAA-FB59-43F5-93B6-ECD6AC71ED0B",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "4C96E715-D878-4F6A-8B78-FB463776CCC3",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 23.005464480874323,
+            "pdfDetectedBoxPoints": [
+              63.804909560723516,
+              89.72131147540983,
+              230.6201550387597,
+              114.26047358834244
+            ],
+            "readerDetectedBoxPoints": [
+              63.804909560723516,
+              112.72677595628416,
+              231.38888888888889,
+              137.26593806921676
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 23.005464480874323,
+        "meanAbsolutePixelDifference": 2.2949304580688477,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/a4/pdf-raster-07.png",
+        "pdfRasterPixels": [
+          1524,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/a4/reader-page-07.png",
+        "readerPaperCrop": [
+          0,
+          100,
+          774,
+          1198
+        ],
+        "readerPaperPixels": [
+          774,
+          1098
+        ],
+        "readerSourcePixels": [
+          774,
+          1296
+        ],
+        "rootMeanSquarePixelDifference": 12.83782391608448
+      }
+    ],
+    "letter": [
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.6966493168510085,
+          "readerToPDF": 0.5914245766661488
+        },
+        "elements": [
+          {
+            "id": "BF8A251E-9DC6-47C7-A970-B76026B84905",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7234042553191458,
+            "pdfDetectedBoxPoints": [
+              63.659574468085104,
+              222.1639344262295,
+              548.3404255319149,
+              525.1147540983607
+            ],
+            "readerDetectedBoxPoints": [
+              64.38297872340425,
+              222.1639344262295,
+              549.063829787234,
+              524.3934426229508
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "634D0BAF-5CD2-419D-B5C7-6BA144A9D03F",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "75981641-881E-4785-B136-6E661EABA4C8",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 20.196721311475414,
+            "pdfDetectedBoxPoints": [
+              64.38297872340425,
+              86.55737704918033,
+              115.74468085106383,
+              105.31147540983606
+            ],
+            "readerDetectedBoxPoints": [
+              65.1063829787234,
+              106.75409836065573,
+              115.74468085106383,
+              125.50819672131148
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 20.196721311475414,
+        "meanAbsolutePixelDifference": 1.4177335500717163,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-01.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-01.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 9.158531972196318
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.46483960059485874,
+          "readerToPDF": 0.4730766309713678
+        },
+        "elements": [
+          {
+            "id": "8CFA3DB4-BF0D-44F9-8892-D0292E6F15C8",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 33.18032786885249,
+            "pdfDetectedBoxPoints": [
+              88.25531914893617,
+              305.8360655737705,
+              409.4468085106383,
+              396.0
+            ],
+            "readerDetectedBoxPoints": [
+              88.97872340425532,
+              339.0163934426229,
+              410.8936170212766,
+              429.1803278688525
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 11
+          },
+          {
+            "id": "AF85FAF9-EECA-4DC4-98DB-06A77E39EF05",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 15.86885245901641,
+            "pdfDetectedBoxPoints": [
+              88.25531914893617,
+              178.88524590163934,
+              207.61702127659575,
+              201.9672131147541
+            ],
+            "readerDetectedBoxPoints": [
+              88.97872340425532,
+              194.0327868852459,
+              207.61702127659575,
+              217.8360655737705
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 12
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 33.18032786885249,
+        "meanAbsolutePixelDifference": 4.420394420623779,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-02.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-02.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 23.638550439790745
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.2304258656050187,
+          "readerToPDF": 0.1376800490346307
+        },
+        "elements": [
+          {
+            "id": "60AE1906-480F-4CB2-BBAB-8BB493DA6A5B",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 75.01639344262296,
+            "pdfDetectedBoxPoints": [
+              88.25531914893617,
+              252.45901639344262,
+              282.1276595744681,
+              349.11475409836066
+            ],
+            "readerDetectedBoxPoints": [
+              88.97872340425532,
+              327.4754098360656,
+              282.1276595744681,
+              424.1311475409836
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 11
+          },
+          {
+            "id": "383E1E13-5C71-4B36-B598-3113158CDDE4",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 11.54098360655739,
+            "pdfDetectedBoxPoints": [
+              77.40425531914893,
+              104.59016393442623,
+              202.5531914893617,
+              126.95081967213115
+            ],
+            "readerDetectedBoxPoints": [
+              77.40425531914893,
+              116.1311475409836,
+              203.27659574468086,
+              138.49180327868854
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 12
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 75.01639344262296,
+        "meanAbsolutePixelDifference": 6.029186248779297,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-03.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-03.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 24.375451968966775
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.579457079970653,
+          "readerToPDF": 0.5454545454545454
+        },
+        "elements": [
+          {
+            "id": "AD707953-50A9-44C7-91FF-37580D75AA49",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7234042553191102,
+            "pdfDetectedBoxPoints": [
+              64.38297872340425,
+              222.1639344262295,
+              548.3404255319149,
+              524.3934426229508
+            ],
+            "readerDetectedBoxPoints": [
+              64.38297872340425,
+              222.1639344262295,
+              549.063829787234,
+              524.3934426229508
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "A109BC18-C8A7-4BBF-B1EC-7EEB56C60DE8",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "42D55C25-6999-4355-8E10-316541776EC3",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 20.196721311475414,
+            "pdfDetectedBoxPoints": [
+              65.1063829787234,
+              86.55737704918033,
+              224.25531914893617,
+              111.80327868852459
+            ],
+            "readerDetectedBoxPoints": [
+              65.82978723404256,
+              106.75409836065573,
+              224.9787234042553,
+              132.0
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 20.196721311475414,
+        "meanAbsolutePixelDifference": 1.6675225496292114,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-04.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-04.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 11.611728106283655
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.5731865932966483,
+          "readerToPDF": 0.3992199964545293
+        },
+        "elements": [
+          {
+            "id": "35289507-D85C-4CC6-977C-EFC0CFC49C44",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7234042553191458,
+            "pdfDetectedBoxPoints": [
+              63.659574468085104,
+              242.36065573770492,
+              300.93617021276594,
+              375.8032786885246
+            ],
+            "readerDetectedBoxPoints": [
+              64.38297872340425,
+              242.36065573770492,
+              300.93617021276594,
+              375.8032786885246
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "C2B3C816-3DFF-4118-B883-14A4F4DFD8AC",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 1.4468085106382773,
+            "pdfDetectedBoxPoints": [
+              380.51063829787233,
+              222.1639344262295,
+              479.6170212765957,
+              396.0
+            ],
+            "readerDetectedBoxPoints": [
+              381.9574468085106,
+              222.1639344262295,
+              479.6170212765957,
+              396.0
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "C9946CE2-FC2C-428F-A560-A1EC82562519",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7234042553191458,
+            "pdfDetectedBoxPoints": [
+              63.659574468085104,
+              431.344262295082,
+              300.93617021276594,
+              564.7868852459017
+            ],
+            "readerDetectedBoxPoints": [
+              64.38297872340425,
+              431.344262295082,
+              300.93617021276594,
+              564.7868852459017
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "E616ED75-2FC8-4353-8DE0-4AEB7220E6B8",
+            "imageContentMode": "fit",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 1.4468085106382773,
+            "pdfDetectedBoxPoints": [
+              380.51063829787233,
+              410.42622950819674,
+              479.6170212765957,
+              584.983606557377
+            ],
+            "readerDetectedBoxPoints": [
+              381.9574468085106,
+              411.1475409836066,
+              479.6170212765957,
+              584.983606557377
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "1A0D36A6-7CD0-442F-BF9A-FBA807A5DD2F",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "7C858288-6789-46CC-937A-AAC5052DC90F",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 19.47540983606558,
+            "pdfDetectedBoxPoints": [
+              65.1063829787234,
+              86.55737704918033,
+              259.70212765957444,
+              106.0327868852459
+            ],
+            "readerDetectedBoxPoints": [
+              65.82978723404256,
+              106.0327868852459,
+              261.1489361702128,
+              125.50819672131148
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 19.47540983606558,
+        "meanAbsolutePixelDifference": 2.290985107421875,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-05.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-05.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 13.896495767080713
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.6030036837631056,
+          "readerToPDF": 0.4749845583693638
+        },
+        "elements": [
+          {
+            "id": "71C92824-F649-4FEC-80FC-BAAA37A71D99",
+            "imageContentMode": "fill",
+            "kind": "image",
+            "maxDetectedBoxDeltaPoints": 0.7234042553191458,
+            "pdfDetectedBoxPoints": [
+              63.659574468085104,
+              222.1639344262295,
+              548.3404255319149,
+              525.1147540983607
+            ],
+            "readerDetectedBoxPoints": [
+              64.38297872340425,
+              222.1639344262295,
+              549.063829787234,
+              524.3934426229508
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 0
+          },
+          {
+            "id": "15DDD46C-D5B5-4507-AD89-46DB31F2A9DB",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "00FFDFC5-AB3D-491B-B827-1F609D53BB59",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 20.196721311475414,
+            "pdfDetectedBoxPoints": [
+              65.1063829787234,
+              87.27868852459017,
+              120.08510638297872,
+              106.0327868852459
+            ],
+            "readerDetectedBoxPoints": [
+              65.82978723404256,
+              107.47540983606558,
+              120.08510638297872,
+              125.50819672131148
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 20.196721311475414,
+        "meanAbsolutePixelDifference": 1.6149145364761353,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-06.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-06.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 10.183759693100402
+      },
+      {
+        "edgeCoverageWithinOnePoint": {
+          "pdfToReader": 0.06299944248280989,
+          "readerToPDF": 0.043965394979435544
+        },
+        "elements": [
+          {
+            "id": "BF963745-74C5-4778-8B64-2246B5044F48",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": null,
+            "pdfDetectedBoxPoints": null,
+            "readerDetectedBoxPoints": null,
+            "rotationDegrees": 0,
+            "zIndex": 9
+          },
+          {
+            "id": "FD253DD1-8C57-4D04-96B0-32B23A284893",
+            "imageContentMode": "fill",
+            "kind": "text",
+            "maxDetectedBoxDeltaPoints": 20.196721311475414,
+            "pdfDetectedBoxPoints": [
+              65.1063829787234,
+              86.55737704918033,
+              236.5531914893617,
+              111.80327868852459
+            ],
+            "readerDetectedBoxPoints": [
+              65.82978723404256,
+              106.75409836065573,
+              237.27659574468086,
+              132.0
+            ],
+            "rotationDegrees": 0,
+            "zIndex": 10
+          }
+        ],
+        "maxDetectedElementBoxDeltaPoints": 20.196721311475414,
+        "meanAbsolutePixelDifference": 2.4081499576568604,
+        "pdfRasterFile": "/Users/lijian15/Library/Developer/CoreSimulator/Devices/41F93DB0-C75A-4044-BD9D-C7D90D00FE9B/data/Containers/Data/Application/ED1C6842-2603-4629-941D-BFAC5E6B0D81/tmp/tailor-pdf-visual-evidence-v1/warmPaper/letter/pdf-raster-07.png",
+        "pdfRasterPixels": [
+          1668,
+          2160
+        ],
+        "readerFile": "verification/memorybook_v2/triple_render_2026-07-21/reader/warmPaper/letter/reader-page-07.png",
+        "readerPaperCrop": [
+          0,
+          160,
+          846,
+          1258
+        ],
+        "readerPaperPixels": [
+          846,
+          1098
+        ],
+        "readerSourcePixels": [
+          846,
+          1416
+        ],
+        "rootMeanSquarePixelDifference": 13.489912432138238
+      }
+    ]
+  },
+  "scope": "Warm Paper deterministic Reader versus LocalPDFExporter raster"
+}

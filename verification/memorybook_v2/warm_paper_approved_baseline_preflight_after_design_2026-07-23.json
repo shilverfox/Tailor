@@ -1,0 +1,150 @@
+{
+  "scope": "Warm Paper approved baseline preflight",
+  "requiredCount": 14,
+  "presentCount": 14,
+  "missing": [],
+  "invalidPng": [],
+  "entries": [
+    {
+      "paper": "letter",
+      "pageKind": "cover",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/cover.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "dedication",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/dedication.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "contents",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/contents.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "chapterOpener",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/chapterOpener.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "photoSelection",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/photoSelection.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "milestone",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/milestone.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "letter",
+      "pageKind": "closing",
+      "path": "design/reference/v1_1/memory-book/warmPaper/letter/closing.png",
+      "exists": true,
+      "pngSize": [
+        1836,
+        2376
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "cover",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/cover.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "dedication",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/dedication.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "contents",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/contents.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "chapterOpener",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/chapterOpener.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "photoSelection",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/photoSelection.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "milestone",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/milestone.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    },
+    {
+      "paper": "a4",
+      "pageKind": "closing",
+      "path": "design/reference/v1_1/memory-book/warmPaper/a4/closing.png",
+      "exists": true,
+      "pngSize": [
+        1785,
+        2526
+      ]
+    }
+  ],
+  "status": "pass"
+}

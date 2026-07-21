@@ -36,10 +36,12 @@ protocol MemoryBookAssetImageProviding: Sendable {
 /// is not silently enabled during export.
 struct PhotoKitMemoryBookAssetImageProvider: MemoryBookAssetImageProviding {
     func isAvailable(identifier: String) -> Bool {
-        PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).count == 1
+        if ManualAssetStore.isAvailable(identifier: identifier) { return true }
+        return PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).count == 1
     }
 
     func image(identifier: String, targetSize: CGSize) -> UIImage? {
+        if let manual = ManualAssetStore.image(identifier: identifier) { return manual }
         let result = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
         guard let asset = result.firstObject else { return nil }
         let options = PHImageRequestOptions()
@@ -78,6 +80,10 @@ actor StoreKitPurchaseService: PurchaseServicing {
 
     deinit {
         transactionUpdates.cancel()
+    }
+
+    func unlockDisplayPrice() async -> String? {
+        try? await Product.products(for: [productIdentifier]).first?.displayPrice
     }
 
     func purchaseUnlock() async throws -> PurchaseState {
@@ -217,7 +223,12 @@ struct LocalPDFExporter: PDFExporting {
                             context.cgContext.translateBy(x: rect.midX, y: rect.midY)
                             context.cgContext.rotate(by: CGFloat(element.rotationDegrees * .pi / 180))
                             context.cgContext.translateBy(x: -rect.midX, y: -rect.midY)
-                            MemoryBookPDFTextAdapter.attributedString(for: textLayout, color: textColor).draw(in: rect)
+                            MemoryBookTextRenderer.draw(
+                                snapshot: textLayout,
+                                color: textColor,
+                                in: rect,
+                                context: context.cgContext
+                            )
                             context.cgContext.restoreGState()
                         }
                     case .shape:

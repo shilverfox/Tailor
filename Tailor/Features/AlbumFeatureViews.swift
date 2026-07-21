@@ -22,6 +22,9 @@ struct AlbumEditorFeatureView: View {
     let preview: () -> Void
     let export: () -> Void
     let persist: () -> Void
+    let openStyle: () -> Void
+    let initialBookCheckTarget: BookCheckNavigationTarget?
+    let initialPageID: UUID?
 
     @State private var selectedPageID: UUID?
     @State private var selectedElementID: UUID?
@@ -32,7 +35,6 @@ struct AlbumEditorFeatureView: View {
     @State private var panel: EditorPanel = .pages
     @State private var showPageManager = false
     @State private var showPhotoPicker = false
-    @State private var showStylePicker = false
     @State private var showLayoutPicker = false
     @State private var showLayers = false
     @State private var appearanceTarget: ElementAppearanceTarget?
@@ -48,17 +50,23 @@ struct AlbumEditorFeatureView: View {
     @State private var canvasZoom: CGFloat = 1
     @StateObject private var photoAvailability = PhotoAssetAvailabilityMonitor()
 
-    init(memoryBook: Binding<MemoryBookDocument?>, purchased: Bool, back: @escaping () -> Void, preview: @escaping () -> Void, export: @escaping () -> Void, persist: @escaping () -> Void) {
+    init(memoryBook: Binding<MemoryBookDocument?>, purchased: Bool, back: @escaping () -> Void, preview: @escaping () -> Void, export: @escaping () -> Void, persist: @escaping () -> Void, openStyle: @escaping () -> Void = {}, initialBookCheckTarget: BookCheckNavigationTarget? = nil, initialPageID: UUID? = nil) {
         self._memoryBook = memoryBook
         self.purchased = purchased
         self.back = back
         self.preview = preview
         self.export = export
         self.persist = persist
+        self.openStyle = openStyle
+        self.initialBookCheckTarget = initialBookCheckTarget
+        self.initialPageID = initialPageID
         // Establish the selected page before the first body pass whenever the
         // document is already restored. This removes the visible unselected
         // first-frame flash in the thumbnail rail.
-        self._selectedPageID = State(initialValue: memoryBook.wrappedValue?.pages.first?.id)
+        let requestedPageID = initialBookCheckTarget?.issue.pageID ?? initialPageID
+        self._selectedPageID = State(initialValue: requestedPageID.flatMap { requested in
+            memoryBook.wrappedValue?.pages.contains(where: { $0.id == requested }) == true ? requested : nil
+        } ?? memoryBook.wrappedValue?.pages.first?.id)
     }
 
     private enum EditorPanel { case pages, layout, photo, text, style }
@@ -107,8 +115,16 @@ struct AlbumEditorFeatureView: View {
                 if let index = arguments.firstIndex(of: "-uiFixturePage"), arguments.indices.contains(index + 1), let requested = UUID(uuidString: arguments[index + 1]), memoryBook?.pages.contains(where: { $0.id == requested }) == true { selectedPageID = requested }
                 else { selectedPageID = memoryBook?.pages.first?.id }
             }
+            if let target = initialBookCheckTarget {
+                pendingBookCheckIssue = target.issue
+                DispatchQueue.main.async { presentPendingBookCheckIssue() }
+            }
         }
         .onChange(of: selectedPageID) { _, _ in
+            // A sheet belongs to the page that created its target. Clear the
+            // presentation before changing pages so a late dismissal cannot
+            // re-present stale text state or terminate the SwiftUI host.
+            textEditorTarget = nil
             canvasZoom = 1
             selectedElementID = nil
             selectedElementIDs.removeAll()
@@ -116,8 +132,15 @@ struct AlbumEditorFeatureView: View {
         }
         .sheet(isPresented: $showPageManager) { PageManagerSheet(book: documentBinding, selectedPageID: $selectedPageID, recordHistory: recordHistory, commit: commit) }
         .sheet(isPresented: $showPhotoPicker) { PhotoPickerSheet(book: documentBinding, selectedPageID: selectedPageID, selectedElementID: selectedElementID, requestCrop: { pageID, elementID in cropTarget = CropTarget(pageID: pageID, elementID: elementID) }, recordHistory: recordHistory, commit: commit) }
-        .sheet(item: $textEditorTarget, onDismiss: { textDraftHighlight = nil }) { target in TextEditorSheet(book: documentBinding, selectedPageID: target.pageID, selectedElementID: target.elementID, initialField: target.field, draftHighlight: $textDraftHighlight, recordHistory: recordHistory, commit: commit) }
-        .sheet(isPresented: $showStylePicker) { StylePickerSheet(book: documentBinding, selectedPageID: selectedPageID, recordHistory: recordHistory, commit: commit) }
+        .sheet(isPresented: textEditorPresentation, onDismiss: {
+            textEditorTarget = nil
+            textDraftHighlight = nil
+        }) {
+            if let target = textEditorTarget {
+                TextEditorSheet(book: documentBinding, selectedPageID: target.pageID, selectedElementID: target.elementID, initialField: target.field, draftHighlight: $textDraftHighlight, recordHistory: recordHistory, commit: commit)
+                    .id(target.id)
+            }
+        }
         .sheet(isPresented: $showLayoutPicker) { LayoutPickerSheet(book: documentBinding, selectedPageID: selectedPageID, choose: { layout in layoutChange = LayoutChangeTarget(pageID: selectedPageID ?? UUID(), layout: layout) }) }
         .sheet(isPresented: $showLayers) {
             ElementLayersSheet(
@@ -563,6 +586,7 @@ struct AlbumEditorFeatureView: View {
     private func editorHeader(book: MemoryBookDocument, page: MemoryBookPage) -> some View {
         HStack(spacing: 14) {
             Button(action: back) { Image(systemName: "chevron.left") }
+                .accessibilityLabel("Back")
             Spacer()
             Text("\(page.pageNumber) of \(book.pages.count)").font(.footnote.weight(.semibold)).foregroundStyle(.white)
             Spacer()
@@ -646,8 +670,8 @@ struct AlbumEditorFeatureView: View {
                     showPhotoPicker = true
                 }
             }
-            tool("textformat", "Text") { textEditorTarget = TextEditorTarget(pageID: selectedPageID, elementID: selectedElementID, field: nil) }
-            tool("paintpalette", "Style") { showStylePicker = true }
+            tool("textformat", "Text") { presentTextEditor(pageID: selectedPageID, elementID: selectedElementID, field: nil) }
+            tool("paintpalette", "Style", action: openStyle)
         }
         .padding(.top, 8).padding(.bottom, 20).background(.ultraThinMaterial)
     }
@@ -663,6 +687,22 @@ struct AlbumEditorFeatureView: View {
     }
 
     private var documentBinding: Binding<MemoryBookDocument> { Binding(get: { memoryBook! }, set: { memoryBook = $0; persist() }) }
+    private var textEditorPresentation: Binding<Bool> {
+        Binding(
+            get: { textEditorTarget != nil },
+            set: { presented in
+                if !presented {
+                    textEditorTarget = nil
+                    textDraftHighlight = nil
+                }
+            }
+        )
+    }
+    private func presentTextEditor(pageID: UUID?, elementID: UUID?, field: MemoryBookTextField?) {
+        guard let pageID = pageID ?? memoryBook?.pages.first?.id,
+              memoryBook?.pages.contains(where: { $0.id == pageID }) == true else { return }
+        textEditorTarget = TextEditorTarget(pageID: pageID, elementID: elementID, field: field)
+    }
     private func pageBinding(_ index: Int) -> Binding<MemoryBookPage> { Binding(get: { documentBinding.wrappedValue.pages[index] }, set: { value in var document = documentBinding.wrappedValue; document.pages[index] = value; document.updatedAt = .now; documentBinding.wrappedValue = document }) }
 
     private func recordHistory() {
@@ -713,7 +753,7 @@ struct AlbumEditorFeatureView: View {
             // before the text sheet reads it.
             guard issue.field != nil, issue.elementID != nil else { return }
             DispatchQueue.main.async {
-                textEditorTarget = TextEditorTarget(pageID: issue.pageID, elementID: issue.elementID, field: issue.field)
+                presentTextEditor(pageID: issue.pageID, elementID: issue.elementID, field: issue.field)
             }
         }
     }
@@ -978,7 +1018,8 @@ private struct EditorBookPageCanvas: View {
                 MemoryBookAttributedTextPreview(
                     snapshot: textLayout,
                     color: uiColor(element.textCustomColor ?? element.textColor.rgb(fallback: plan.fontToken(for: element) == .display ? plan.style.ink : plan.style.secondary)),
-                    diagnosticRole: element.textField?.rawValue ?? element.id.uuidString
+                    diagnosticRole: element.textField?.rawValue ?? element.id.uuidString,
+                    canonicalScale: plan.canonicalTextRenderScale
                 )
                 .frame(width: frame.width, height: frame.height, alignment: .leading)
                 // UIKit only paints the shared B1 attributed paragraph. The
@@ -1479,23 +1520,19 @@ private struct ElementResizeHandle: View {
     }
 }
 
-/// Preview's UIKit bridge deliberately receives the renderer factory's full
-/// attributed paragraph rather than reconstructing a subset with SwiftUI
-/// modifiers. PDF calls the same `MemoryBookTextRenderer` factory.
+/// Reader and PDF use the same CoreText drawing implementation. This bridge
+/// only supplies SwiftUI with a UIKit canvas; it performs no text layout.
 private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
     let snapshot: MemoryBookTextLayoutSnapshot
     let color: UIColor
     let diagnosticRole: String
+    let canonicalScale: CGFloat
 
-    func makeUIView(context: Context) -> MemoryBookPreviewLabel {
-        let label = MemoryBookPreviewLabel()
-        label.numberOfLines = 0
-        label.lineBreakMode = .byWordWrapping
-        label.contentMode = .topLeft
-        label.backgroundColor = .clear
-        label.isOpaque = false
-        label.setContentHuggingPriority(.required, for: .vertical)
-        return label
+    func makeUIView(context: Context) -> MemoryBookPreviewTextView {
+        let view = MemoryBookPreviewTextView()
+        view.backgroundColor = .clear
+        view.isOpaque = false
+        return view
     }
 
     /// SwiftUI may ask a UIKit representable for an unconstrained size before
@@ -1504,7 +1541,7 @@ private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
     /// width and leaves the glyphs off-canvas. The render-plan snapshot already
     /// contains the exact editor/PDF text rectangle, so use it as the bounded
     /// fallback while retaining the shared attributed paragraph.
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: MemoryBookPreviewLabel, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: MemoryBookPreviewTextView, context: Context) -> CGSize? {
         let fallback = snapshot.spec.textRect.size
         let width = resolvedDimension(proposal.width, fallback: fallback.width)
         let height = resolvedDimension(proposal.height, fallback: fallback.height)
@@ -1518,39 +1555,39 @@ private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
         return proposed
     }
 
-    func updateUIView(_ label: MemoryBookPreviewLabel, context: Context) {
+    func updateUIView(_ view: MemoryBookPreviewTextView, context: Context) {
         let attributed = MemoryBookPreviewTextAdapter.attributedString(for: snapshot, color: color)
-        label.attributedText = attributed
-        label.textColor = color
-        label.textAlignment = snapshot.spec.alignment.nsTextAlignment
-        label.semanticContentAttribute = switch snapshot.spec.writingDirection {
-        case .rightToLeft: .forceRightToLeft
-        case .leftToRight: .forceLeftToRight
-        case .natural: .unspecified
-        }
-        // UIKit does not always invalidate its intrinsic text layout when a
-        // SwiftUI frame changes after the attributed value arrives. Explicit
-        // invalidation keeps the bridge's B1 paragraph visible without
-        // reconstructing it as a separate SwiftUI Text implementation.
-        label.invalidateIntrinsicContentSize()
-        label.setNeedsLayout()
+        view.snapshot = snapshot
+        view.color = color
+        view.canonicalScale = canonicalScale
+        view.setNeedsDisplay()
         if ProcessInfo.processInfo.arguments.contains("-uiTesting") {
-            label.isAccessibilityElement = true
-            label.accessibilityIdentifier = "Text renderer diagnostic \(diagnosticRole)"
-            label.accessibilityLabel = snapshot.value
-            // `updateUIView` can run before SwiftUI resolves the representable
-            // frame, when UIKit temporarily reports an infinite dimension.
-            // Keep the diagnostic, but let the UILabel publish bounds only
-            // after layout and never coerce an unresolved CGFloat to Int.
-            label.configureDiagnostic(
+            view.isAccessibilityElement = true
+            view.accessibilityIdentifier = "Text renderer diagnostic \(diagnosticRole)"
+            view.accessibilityLabel = snapshot.value
+            view.configureDiagnostic(
                 prefix: "snapshot=\(snapshot.value.count);attributed=\(attributed.length);color=\(color.description)"
             )
         }
     }
 }
 
-private final class MemoryBookPreviewLabel: UILabel {
+private final class MemoryBookPreviewTextView: UIView {
+    var snapshot: MemoryBookTextLayoutSnapshot?
+    var color: UIColor = .label
+    var canonicalScale: CGFloat = 1
     private var diagnosticPrefix: String?
+
+    override func draw(_ rect: CGRect) {
+        guard let snapshot, let context = UIGraphicsGetCurrentContext() else { return }
+        MemoryBookTextRenderer.draw(
+            snapshot: snapshot,
+            color: color,
+            in: bounds,
+            context: context,
+            canonicalScale: canonicalScale
+        )
+    }
 
     func configureDiagnostic(prefix: String) {
         diagnosticPrefix = prefix
@@ -1576,10 +1613,6 @@ private final class MemoryBookPreviewLabel: UILabel {
         return String(describing: value)
     }
 
-    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
-        let measured = super.textRect(forBounds: bounds, limitedToNumberOfLines: numberOfLines)
-        return CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: min(bounds.height, measured.height))
-    }
 }
 
 private struct ElementLayersSheet: View {
@@ -1778,7 +1811,7 @@ private struct PageManagerSheet: View {
                 }
                 Text(page.title.isEmpty ? "Untitled page" : page.title).font(.caption.weight(.semibold)).foregroundStyle(TailorColor.ink).lineLimit(1)
                 HStack {
-                    Text(page.isLocked ? "Structured page" : "Editable page").font(.caption2).foregroundStyle(TailorColor.secondaryInk)
+                    Text(page.isLocked ? "Locked layout page" : "Editable page").font(.caption2).foregroundStyle(TailorColor.secondaryInk)
                     Spacer()
                     pageMenu(page)
                 }
@@ -2845,7 +2878,13 @@ private struct TextEditorSheet: View {
         let resolvedID = selectedPageID ?? pages.first?.id
         return pages.first(where: { $0.id == resolvedID })
     }
-    private var existingFields: [MemoryBookTextField] { guard let page else { return [] }; return page.elements.compactMap(\.textField).filter { $0.isAllowed(on: page.kind) } }
+    private var existingFields: [MemoryBookTextField] {
+        guard let page else { return [] }
+        var seen = Set<MemoryBookTextField>()
+        return page.elements.compactMap(\.textField).filter { role in
+            role.isAllowed(on: page.kind) && seen.insert(role).inserted
+        }
+    }
     private var addableFields: [MemoryBookTextField] { guard let page else { return [] }; return MemoryBookBuilder.optionalTextFields(for: page.kind).filter { !existingFields.contains($0) } }
     private var validation: MemoryBookTextDraftValidation? { guard let page, let field else { return nil }; let e = selectedTextElement; return book.textDraftValidation(text: text, style: textStyle, fontScale: textFontScale, typography: typography, normalizedFrame: e?.normalizedFrame ?? MemoryBookBuilder.defaultTextFrame(for: field), on: page, zIndex: e?.zIndex ?? 9, field: field) }
     private var readability: MemoryBookTextReadabilityAssessment? {
@@ -2947,9 +2986,8 @@ private struct TextEditorSheet: View {
         typography = target?.textTypographyAdjustments ?? .default
         baselineText = text; baselineStyle = textStyle; baselineFontScale = textFontScale; baselineFont = textFont; baselineColor = textColor; baselineCustomColor = textCustomColor; baselineTypography = typography
         updateHighlight()
-        focusTextInput()
     }
-    private func create(_ role: MemoryBookTextField) { forceCreateFreeText = false; field = role; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; typography = .default; baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; baselineTypography = .default; updateHighlight(); focusTextInput() }
+    private func create(_ role: MemoryBookTextField) { forceCreateFreeText = false; field = role; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; typography = .default; baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; baselineTypography = .default; updateHighlight() }
     private func createFreeText() {
         // A free note is not tied to an existing semantic field.  Deferring
         // insertion until Save means Back/Discard leaves no empty ghost layer.
@@ -2957,10 +2995,6 @@ private struct TextEditorSheet: View {
         field = .legacyUserNote; text = ""; textStyle = .standard; textFontScale = 1; textFont = .editorial; textColor = .ink; textCustomColor = nil; typography = .default
         baselineText = ""; baselineStyle = .standard; baselineFontScale = 1; baselineFont = .editorial; baselineColor = .ink; baselineCustomColor = nil; baselineTypography = .default
         draftHighlight = nil
-        focusTextInput()
-    }
-    private func focusTextInput() {
-        DispatchQueue.main.async { isTextInputFocused = true }
     }
     private func save() -> Bool {
         guard let page, let field, let validation, validation.isValid, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -3138,6 +3172,79 @@ private struct StylePickerSheet: View {
     }
 }
 
+/// Screen 16. It deliberately owns a temporary draft: Cancel cannot mutate the
+/// editor book, while Apply commits one atomic change before returning to 11.
+struct EditorStyleFeatureView: View {
+    @Binding var book: MemoryBookDocument?
+    let selectedPageID: UUID?
+    let apply: () -> Void
+    let cancel: () -> Void
+    @State private var draftStyle: AlbumStyle = .warmPaper
+    @State private var scope = 0
+
+    var body: some View {
+        TailorScreen(eyebrow: "STYLE", title: "Set the page mood.", back: cancel) {
+            TailorInfoCard(symbol: "paintpalette", title: "TEMPORARY STYLE FRAME", message: "Apply returns to your current page editor. Cancel leaves every page unchanged.")
+            Picker("Apply style to", selection: $scope) {
+                Text("This page").tag(0)
+                Text("Entire book").tag(1)
+            }
+            .pickerStyle(.segmented)
+            ForEach(AlbumStyle.allCases, id: \.self) { style in
+                Button {
+                    draftStyle = style
+                } label: {
+                    HStack {
+                        Circle().fill(Color(red: MemoryBookPageStyle.resolve(style).accent.red, green: MemoryBookPageStyle.resolve(style).accent.green, blue: MemoryBookPageStyle.resolve(style).accent.blue)).frame(width: 22, height: 22)
+                        Text(style.label)
+                        Spacer()
+                        if draftStyle == style { Image(systemName: "checkmark.circle.fill") }
+                    }
+                    .padding(14).foregroundStyle(TailorColor.ink)
+                    .background(TailorColor.elevated).clipShape(RoundedRectangle(cornerRadius: 12))
+                }.buttonStyle(.plain)
+            }
+            TailorPrimaryButton(title: "Apply style", action: commit)
+                .accessibilityIdentifier("Editor style apply")
+            Button("Cancel", action: cancel).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay).frame(maxWidth: .infinity)
+                .accessibilityIdentifier("Editor style cancel")
+        }
+        .onAppear { draftStyle = book?.style ?? .warmPaper }
+    }
+
+    private func commit() {
+        guard var updated = book else { cancel(); return }
+        if scope == 1 {
+            updated.style = draftStyle
+            updated.profile.albumStyle = draftStyle
+        } else if let pageID = selectedPageID, let index = updated.pages.firstIndex(where: { $0.id == pageID }) {
+            updated.pages[index].styleOverride = draftStyle
+        } else {
+            updated.style = draftStyle
+            updated.profile.albumStyle = draftStyle
+        }
+        updated.beginNewRevision()
+        book = updated
+        apply()
+    }
+}
+
+struct LatestEditsCheckingView: View {
+    var body: some View {
+        TailorScreen(eyebrow: "BOOK CHECK", title: "CHECKING LATEST EDITS", back: nil) {
+            VStack(spacing: 18) {
+                ProgressView().controlSize(.large)
+                Text("Checking this new revision, paper size, and current print rules before continuing.")
+                    .font(.callout).multilineTextAlignment(.center).foregroundStyle(TailorColor.secondaryInk)
+                Text("Please wait — preview, purchase, and export stay unavailable until this check finishes.")
+                    .font(.footnote.weight(.semibold)).multilineTextAlignment(.center).foregroundStyle(TailorColor.ink)
+            }.frame(maxWidth: .infinity, minHeight: 300)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("Checking latest edits")
+    }
+}
+
 private struct PageBackgroundEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var book: MemoryBookDocument
@@ -3301,6 +3408,113 @@ private struct BookCheckSheet: View {
     }
 }
 
+struct BookCheckFeatureView: View {
+    @Binding var book: MemoryBookDocument?
+    @Binding var focusedIssueKey: String?
+    let editIssue: (BookCheckNavigationTarget) -> Void
+    let continueFlow: () -> Void
+    let back: () -> Void
+    let persist: () -> Void
+    @State private var pendingIgnoreIssue: MemoryBookIssue?
+
+    private var issues: [MemoryBookIssue] {
+        book?.checkBook(assetIsAvailable: PhotoAssetAvailability.isAvailable) ?? []
+    }
+    private var blockers: [MemoryBookIssue] { issues.filter { $0.severity == .blocking } }
+    private var suggestions: [MemoryBookIssue] { issues.filter { $0.severity == .suggestion && book?.isBookCheckSuggestionIgnored($0) != true } }
+    private var ignoredSuggestions: [MemoryBookIssue] { issues.filter { $0.severity == .suggestion && book?.isBookCheckSuggestionIgnored($0) == true } }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+        ZStack {
+        TailorColor.paper.ignoresSafeArea()
+        ScrollView {
+        VStack(alignment: .leading, spacing: TailorSpacing.m) {
+            HStack { Button(action: back) { Image(systemName: "chevron.left") }.frame(width: 44, height: 44).accessibilityLabel("Back"); Spacer(); Text("BOOK CHECK").font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(TailorColor.clay) }
+            Text(blockers.isEmpty ? "Almost ready to keep." : "A few pages need attention.").font(TailorFont.display(36)).foregroundStyle(TailorColor.ink)
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle().stroke(TailorColor.mist, lineWidth: 9)
+                    Circle().trim(from: 0, to: score / 100).stroke(blockers.isEmpty ? TailorColor.ink : TailorColor.clay, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90))
+                    Text("\(Int(score))").font(.title2.weight(.bold)).foregroundStyle(TailorColor.ink)
+                }.frame(width: 88, height: 88)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(blockers.isEmpty ? "Print-ready structure" : "Export is paused")
+                        .font(.headline)
+                    Text("\(blockers.count) blocking · \(suggestions.count) suggestions")
+                        .font(.footnote).foregroundStyle(TailorColor.secondaryInk)
+                }
+            }
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(TailorColor.elevated).clipShape(RoundedRectangle(cornerRadius: 18))
+
+            if issues.isEmpty {
+                TailorInfoCard(symbol: "checkmark.seal", title: "Every page passed", message: "Photos, text fit, crop safety, fonts and printable resolution are ready for final preview.")
+            } else {
+                ForEach(Array(issues.enumerated()), id: \.element.persistenceKey) { index, issue in
+                    VStack(alignment: .leading, spacing: 8) {
+                    Button(action: { focusedIssueKey = issue.persistenceKey; editIssue(.init(issue: issue, issueIndex: index)) }) {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: issue.severity == .blocking ? "exclamationmark.triangle.fill" : "lightbulb.fill")
+                                .foregroundStyle(issue.severity == .blocking ? .red : TailorColor.clay)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(issue.severity == .blocking ? "Needs attention" : "Suggestion").font(.caption.weight(.bold)).foregroundStyle(TailorColor.ink)
+                                Text(issue.message).font(.footnote).foregroundStyle(TailorColor.secondaryInk).multilineTextAlignment(.leading)
+                                if let pageID = issue.pageID, let page = book?.pages.first(where: { $0.id == pageID }) {
+                                    Text("Page \(page.pageNumber) · Open in editor").font(.caption.weight(.bold)).foregroundStyle(TailorColor.clay)
+                                }
+                            }
+                            Spacer(); Image(systemName: "chevron.right").foregroundStyle(TailorColor.secondaryInk)
+                        }.padding(14)
+                    }
+                    .buttonStyle(.plain)
+                    if issue.severity == .suggestion {
+                        let ignored = book?.isBookCheckSuggestionIgnored(issue) == true
+                        Button(ignored ? "Undo ignore" : "Keep and ignore suggestion") {
+                            if ignored { setIgnored(issue, false) } else { pendingIgnoreIssue = issue }
+                        }
+                            .font(.caption.weight(.bold)).foregroundStyle(TailorColor.clay).padding(.horizontal, 14)
+                        if ignored { Text("Ignored by you · risk remains recorded").font(.caption2).foregroundStyle(TailorColor.secondaryInk).padding(.horizontal, 14) }
+                    }
+                    }.padding(.bottom, 8).background(TailorColor.elevated).clipShape(RoundedRectangle(cornerRadius: 16)).id(issue.persistenceKey)
+                }
+            }
+            TailorInfoCard(symbol: "lock.shield", title: "Checked before payment", message: "Book Check inspects the complete document. Purchasing never hides a layout problem or changes your pages.")
+        }.padding(.horizontal, TailorSpacing.l).padding(.top, TailorSpacing.s).padding(.bottom, 32)
+        }.onAppear { scrollToFocused(proxy) }.onChange(of: focusedIssueKey) { _, _ in scrollToFocused(proxy) }
+        .confirmationDialog("Ignore this suggestion?", isPresented: Binding(get: { pendingIgnoreIssue != nil }, set: { if !$0 { pendingIgnoreIssue = nil } })) {
+            Button("Keep and ignore suggestion", role: .destructive) { if let issue = pendingIgnoreIssue { setIgnored(issue, true) }; pendingIgnoreIssue = nil }
+                .accessibilityIdentifier("Confirm ignore Book Check suggestion")
+            Button("Keep reviewing", role: .cancel) { pendingIgnoreIssue = nil }
+        } message: { Text("\(pendingIgnoreIssue?.message ?? "This print risk remains.") Your choice is saved with this book revision and can be reversed with Undo ignore. Blocking issues can never be ignored.") }
+        }
+        .safeAreaInset(edge: .bottom) {
+            TailorPrimaryButton(title: blockers.isEmpty ? "Continue to final preview" : "Review blocking issues", action: blockers.isEmpty ? continueFlow : reviewFirstBlockingIssue)
+                .padding(.horizontal, 24).padding(.vertical, 12).background(TailorColor.paper)
+        }
+        }
+    }
+
+    /// Jumps to the first blocking issue. `issues` is recomputed on every access
+    /// and each `MemoryBookIssue.id` is a fresh UUID, so matching by value
+    /// (`firstIndex(of:)`) always failed and the button did nothing. Match on the
+    /// content-stable `persistenceKey` instead — the same identity the issue
+    /// cards and focus/scroll logic already use.
+    private func reviewFirstBlockingIssue() {
+        let current = issues
+        guard let first = current.first(where: { $0.severity == .blocking }),
+              let index = current.firstIndex(where: { $0.persistenceKey == first.persistenceKey }) else { return }
+        focusedIssueKey = first.persistenceKey
+        editIssue(.init(issue: first, issueIndex: index))
+    }
+
+    private var score: CGFloat {
+        max(0, 100 - CGFloat(blockers.count * 18 + suggestions.count * 3))
+    }
+    private func setIgnored(_ issue: MemoryBookIssue, _ ignored: Bool) { guard var value = book else { return }; value.setBookCheckSuggestion(issue, ignored: ignored); book = value; persist() }
+    private func scrollToFocused(_ proxy: ScrollViewProxy) { guard let focusedIssueKey else { return }; DispatchQueue.main.async { withAnimation { proxy.scrollTo(focusedIssueKey, anchor: .center) } } }
+}
+
 private extension AlbumStyle {
     var label: String { switch self { case .warmPaper: "Warm Paper"; case .quietNight: "Quiet Night"; case .fieldNotes: "Field Notes"; case .cinema: "Cinema"; case .filmAlbum: "Film Album" } }
 }
@@ -3316,17 +3530,47 @@ struct PreviewFeatureView: View {
     let chapters: [Chapter]
     let photos: [ArchivePhoto]
     @Binding var memoryBook: MemoryBookDocument?
+    @Binding var selectedLogicalPageID: UUID?
     let purchased: Bool
     let next: () -> Void
     let back: () -> Void
+    let editPage: (UUID?) -> Void
+    let changeStyle: (() -> Void)?
     @State private var readerPage = 0
     /// This is the source of truth for reading position. A tab index describes
     /// a presentation group, which changes from one page to a two-page spread
     /// after rotation; a MemoryBookPage identity does not.
-    @State private var readerLogicalPageID: UUID?
     @State private var showCustomization = false
     @State private var showContents = false
     @StateObject private var photoAvailability = PhotoAssetAvailabilityMonitor()
+
+    init(
+        name: String,
+        style: Binding<AlbumStyle>,
+        pageSize: Binding<PDFPageSize>,
+        chapters: [Chapter],
+        photos: [ArchivePhoto],
+        memoryBook: Binding<MemoryBookDocument?>,
+        selectedLogicalPageID: Binding<UUID?>,
+        purchased: Bool,
+        next: @escaping () -> Void,
+        back: @escaping () -> Void,
+        editPage: @escaping (UUID?) -> Void,
+        changeStyle: (() -> Void)? = nil
+    ) {
+        self.name = name
+        self._style = style
+        self._pageSize = pageSize
+        self.chapters = chapters
+        self.photos = photos
+        self._memoryBook = memoryBook
+        self._selectedLogicalPageID = selectedLogicalPageID
+        self.purchased = purchased
+        self.next = next
+        self.back = back
+        self.editPage = editPage
+        self.changeStyle = changeStyle
+    }
 
     var body: some View {
         // Reader intentionally does not use TailorScreen: the book is the
@@ -3339,7 +3583,7 @@ struct PreviewFeatureView: View {
                     document: documentBinding,
                     watermarked: !purchased,
                     selectedPage: $readerPage,
-                    selectedLogicalPageID: $readerLogicalPageID,
+                    selectedLogicalPageID: $selectedLogicalPageID,
                     assetIsAvailable: PhotoAssetAvailability.isAvailable,
                     immersive: true
                 )
@@ -3358,7 +3602,7 @@ struct PreviewFeatureView: View {
                         .foregroundStyle(TailorColor.ink)
                         .accessibilityLabel("A book to keep.")
                     Spacer()
-                    Button("Edit") { back() }
+                    Button("Edit") { editPage(selectedLogicalPageID) }
                         .font(.footnote.weight(.bold))
                         .frame(width: 44, height: 44)
                         .accessibilityLabel("Edit book")
@@ -3371,19 +3615,37 @@ struct PreviewFeatureView: View {
                 .padding(.horizontal, 18)
                 .background(.ultraThinMaterial)
                 Spacer()
-                HStack(spacing: 14) {
-                    Button("Customize book") { showCustomization = true }
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(TailorColor.clay)
-                    Spacer()
-                    Label("Swipe left or right", systemImage: "hand.draw")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(TailorColor.secondaryInk)
-                        .accessibilityIdentifier("Reader navigation hint")
-                    Text("PAGE \(readerLogicalPageNumber) OF \(visiblePageCount)")
-                        .font(.caption.weight(.bold))
-                        .tracking(1)
-                        .foregroundStyle(TailorColor.secondaryInk)
+                // Two rows: actions on top (Style / Customize / Paper), reading
+                // status below (swipe hint + page count). Splitting them stops
+                // the single crowded row that forced "Customize" to hyphenate,
+                // and keeps controls and status at distinct information levels.
+                VStack(spacing: 10) {
+                    HStack(spacing: 16) {
+                        Button("Style") { changeStyle?() }
+                            .foregroundStyle(changeStyle == nil ? TailorColor.secondaryInk : TailorColor.clay)
+                            .disabled(changeStyle == nil)
+                        Rectangle().fill(TailorColor.line).frame(width: 1, height: 14)
+                        Button("Customize") { editPage(selectedLogicalPageID) }
+                            .foregroundStyle(TailorColor.clay)
+                        Rectangle().fill(TailorColor.line).frame(width: 1, height: 14)
+                        Button("Paper") { showCustomization = true }
+                            .foregroundStyle(TailorColor.clay)
+                        Spacer()
+                    }
+                    .font(.footnote.weight(.bold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    HStack {
+                        Label("Swipe left or right", systemImage: "hand.draw")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(TailorColor.secondaryInk)
+                            .accessibilityIdentifier("Reader navigation hint")
+                        Spacer()
+                        Text("PAGE \(readerLogicalPageNumber) OF \(visiblePageCount)")
+                            .font(.caption.weight(.bold))
+                            .tracking(1)
+                            .foregroundStyle(TailorColor.secondaryInk)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
@@ -3405,7 +3667,7 @@ struct PreviewFeatureView: View {
             }
         }
         .sheet(isPresented: $showCustomization) {
-            PreviewCustomizationSheet(style: $style, pageSize: $pageSize)
+            PreviewCustomizationSheet(style: $style, pageSize: $pageSize, showsStyles: false)
         }
         .sheet(isPresented: $showContents) {
             ReaderContentsSheet(
@@ -3414,16 +3676,17 @@ struct PreviewFeatureView: View {
             ) { pageID in
                 // The reader maps this identity into its current portrait or
                 // landscape group. Never treat a logical page as a tab index.
-                readerLogicalPageID = pageID
+                selectedLogicalPageID = pageID
                 showContents = false
             }
         }
         .onAppear {
             let arguments = ProcessInfo.processInfo.arguments
-            if let index = arguments.firstIndex(of: "-uiFixturePage"), arguments.indices.contains(index + 1), let requested = UUID(uuidString: arguments[index + 1]), memoryBook?.pages.contains(where: { $0.id == requested }) == true { readerLogicalPageID = requested }
+            if let index = arguments.firstIndex(of: "-uiFixturePage"), arguments.indices.contains(index + 1), let requested = UUID(uuidString: arguments[index + 1]), memoryBook?.pages.contains(where: { $0.id == requested }) == true { selectedLogicalPageID = requested }
+            else if selectedLogicalPageID == nil { selectedLogicalPageID = memoryBook?.readerVisiblePages(watermarked: !purchased).first?.id }
         }
         .safeAreaInset(edge: .bottom) {
-            TailorPrimaryButton(title: purchased ? "Generate full PDF" : "Unlock complete album · $19.99", action: next)
+            TailorPrimaryButton(title: purchased ? "Generate full PDF" : "Unlock complete album", action: next)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 10)
                 .background(TailorColor.paper)
@@ -3436,7 +3699,7 @@ struct PreviewFeatureView: View {
     }
     private var readerLogicalPageNumber: Int {
         guard
-            let pageID = readerLogicalPageID,
+            let pageID = selectedLogicalPageID,
             let page = memoryBook?.pages.first(where: { $0.id == pageID })
         else {
             return max(1, readerPage + 1)
@@ -3472,23 +3735,13 @@ private struct AlbumPagesPreview: View {
             let groups = pageGroups(landscape: landscape)
             TabView(selection: $selectedPage) {
                 ForEach(Array(groups.enumerated()), id: \.offset) { offset, pages in
-                    ZStack(alignment: .bottom) {
-                        ReaderPageSpread(
-                            pages: pages,
-                            document: document,
-                            watermarked: watermarked,
-                            assetIsAvailable: assetIsAvailable,
-                            isSpread: landscape
-                        )
-                        if pages.contains(where: { $0.kind == .contents }) {
-                            ReaderContentsOverlay(
-                                entries: contentsEntries,
-                                visiblePageIDs: Set(visiblePages.map(\.id))
-                            ) { pageID in
-                                selectedLogicalPageID = pageID
-                            }
-                        }
-                    }
+                    ReaderPageSpread(
+                        pages: pages,
+                        document: document,
+                        watermarked: watermarked,
+                        assetIsAvailable: assetIsAvailable,
+                        isSpread: landscape
+                    )
                     .tag(offset)
                 }
             }
@@ -3564,12 +3817,6 @@ private struct AlbumPagesPreview: View {
         }
     }
 
-    private var contentsEntries: [(id: UUID, title: String, subtitle: String)] {
-        document.pages
-            .filter { $0.kind == .chapterOpener }
-            .map { page in (page.id, page.title, page.subtitle) }
-    }
-
     /// The unpaid reader is a truthful sample rather than an arbitrary prefix:
     /// it keeps the book's beginning and ending and, when available, shows two
     /// different periods. The complete document remains editable upstream.
@@ -3581,25 +3828,11 @@ private struct AlbumPagesPreview: View {
 /// The reader, its top Contents tool, and its printed contents page must agree
 /// about which pages are present in a free sample. Keeping this selection in
 /// the document layer prevents navigation from resolving to a hidden page.
-private extension MemoryBookDocument {
+extension MemoryBookDocument {
     func readerVisiblePages(watermarked: Bool) -> [MemoryBookPage] {
-        guard watermarked, pages.count > 8 else { return pages }
-        var selected: [MemoryBookPage] = []
-        func include(_ page: MemoryBookPage?) {
-            guard let page, !selected.contains(where: { $0.id == page.id }), selected.count < 8 else { return }
-            selected.append(page)
-        }
-        include(pages.first(where: { $0.kind == .cover }))
-        include(pages.first(where: { $0.kind == .contents }))
-        let chapterOpeners = pages.filter { $0.kind == .chapterOpener }
-        include(chapterOpeners.first)
-        include(chapterOpeners.dropFirst().first)
-        let photoPages = pages.filter { $0.kind == .photoSelection || $0.kind == .milestone }
-        include(photoPages.first)
-        include(photoPages.dropFirst().last)
-        include(pages.last(where: { $0.kind == .closing }))
-        for page in pages where selected.count < 6 { include(page) }
-        return selected.sorted { $0.pageNumber < $1.pageNumber }
+        guard watermarked else { return pages }
+        let ids = Set(MemoryBookSamplePlanner.make(for: self).pageIDs)
+        return pages.filter { ids.contains($0.id) }
     }
 }
 
@@ -3637,59 +3870,6 @@ private struct ReaderPageSpread: View {
                 ? (pages.count == 2 ? "Reader double-page spread" : "Reader landscape single page")
                 : "Reader single page"
         )
-    }
-}
-
-private struct ReaderContentsOverlay: View {
-    let entries: [(id: UUID, title: String, subtitle: String)]
-    let visiblePageIDs: Set<UUID>
-    let jump: (UUID) -> Void
-    @State private var unavailableTitle: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("CONTENTS").font(.caption2.weight(.bold)).tracking(1)
-            if entries.isEmpty {
-                Text("Chapters will appear here as you add them.").font(.caption2)
-            } else {
-                ForEach(entries, id: \.id) { entry in
-                    Button {
-                        if visiblePageIDs.contains(entry.id) {
-                            jump(entry.id)
-                        } else {
-                            unavailableTitle = entry.title
-                        }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(entry.title).lineLimit(1)
-                                if !entry.subtitle.isEmpty { Text(entry.subtitle).font(.caption2).lineLimit(1) }
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("Contents jump \(entry.id.uuidString)")
-                    .accessibilityLabel("Jump to \(entry.title)")
-                }
-            }
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(TailorColor.ink)
-        .padding(10)
-        .frame(maxWidth: 250, alignment: .leading)
-        .background(TailorColor.elevated.opacity(0.94), in: RoundedRectangle(cornerRadius: 12))
-        .padding(16)
-        .accessibilityIdentifier("Reader contents")
-        .alert("This chapter is not in the free sample.", isPresented: Binding(
-            get: { unavailableTitle != nil },
-            set: { if !$0 { unavailableTitle = nil } }
-        )) {
-            Button("Keep reading", role: .cancel) {}
-        } message: {
-            Text("\(unavailableTitle ?? "This chapter") is available after you unlock the complete album.")
-        }
     }
 }
 
@@ -3748,17 +3928,20 @@ private struct PreviewCustomizationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var style: AlbumStyle
     @Binding var pageSize: PDFPageSize
+    let showsStyles: Bool
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Choose a visual voice for every page. Your photos and page edits stay unchanged.")
-                        .font(.footnote)
-                        .foregroundStyle(TailorColor.secondaryInk)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(AlbumStyle.allCases, id: \.self) { choice in
-                            styleCard(choice)
+                    if showsStyles {
+                        Text("Choose a visual voice for every page. Your photos and page edits stay unchanged.")
+                            .font(.footnote)
+                            .foregroundStyle(TailorColor.secondaryInk)
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            ForEach(AlbumStyle.allCases, id: \.self) { choice in
+                                styleCard(choice)
+                            }
                         }
                     }
                     VStack(alignment: .leading, spacing: 10) {
@@ -3772,7 +3955,7 @@ private struct PreviewCustomizationSheet: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Customize book")
+            .navigationTitle(showsStyles ? "Customize book" : "Print size")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }
@@ -3833,9 +4016,24 @@ private struct PreviewCustomizationSheet: View {
 }
 
 struct PurchaseFeatureView: View {
-    let purchase: () -> Void; let restore: () -> Void; let errorMessage: String?; let noticeMessage: String?; let isPurchasing: Bool; let next: () -> Void; let back: () -> Void
+    let revisionID: UUID?; let paperSize: PDFPageSize; let displayPrice: String?; let isLoadingPrice: Bool; let priceLoadFailed: Bool; let retryPrice: () -> Void; let purchase: () -> Void; let restore: () -> Void; let errorMessage: String?; let noticeMessage: String?; let isPurchasing: Bool; let next: () -> Void; let back: () -> Void
     var body: some View { TailorScreen(eyebrow: "ONE-TIME UNLOCK", title: "Keep every page.", back: back) {
-        Text("$19.99 · One-time purchase").font(.title2.weight(.semibold))
+        TailorInfoCard(symbol: "checkmark.seal.fill", title: "BOOK CHECK PASSED", message: "Revision \(revisionID?.uuidString.prefix(8) ?? "—") · \(paperSize == .letter ? "US Letter" : "A4") · Rules v\(BookCheckCacheKey.currentRulesVersion)")
+        if let displayPrice {
+            Text("\(displayPrice) · One-time purchase")
+                .font(.title2.weight(.semibold))
+                .accessibilityIdentifier("Localized unlock price")
+        } else if isLoadingPrice {
+            HStack(spacing: 10) { ProgressView(); Text("Loading price from the App Store…") }
+                .font(.title3.weight(.semibold))
+                .accessibilityIdentifier("Unlock price loading")
+        } else if priceLoadFailed {
+            TailorInfoCard(symbol: "wifi.exclamationmark", title: "Price unavailable", message: "Connect to the App Store and load the current price before purchasing.")
+            Button("Try loading price again", action: retryPrice)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(TailorColor.clay)
+                .accessibilityIdentifier("Retry unlock price")
+        }
         ForEach(["Full, watermark-free PDF", "Every chapter and selected photo", "Print-ready A4 and US Letter", "Stays private on your device"], id: \.self) { Label($0, systemImage: "checkmark.circle.fill").foregroundStyle(TailorColor.ink) }
         TailorInfoCard(symbol: "person.crop.circle.badge.checkmark", title: "No subscription. No account.", message: "Your full album remains editable on this iPhone.").frame(maxWidth: .infinity)
         if let errorMessage { Text(errorMessage).font(.footnote).foregroundStyle(.red) }
@@ -3847,7 +4045,8 @@ struct PurchaseFeatureView: View {
         Spacer(minLength: 80)
     }.safeAreaInset(edge: .bottom) {
         VStack(spacing: 10) {
-            TailorPrimaryButton(title: isPurchasing ? "Contacting App Store…" : "Unlock complete album", disabled: isPurchasing, action: purchase)
+            TailorPrimaryButton(title: isPurchasing ? "Contacting App Store…" : "Unlock complete album", disabled: isPurchasing || displayPrice == nil, action: purchase)
+                .accessibilityIdentifier("Unlock complete album")
             Button("Restore purchase", action: restore).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay).disabled(isPurchasing)
         }
         .padding(.horizontal, 24)
@@ -3883,7 +4082,7 @@ private struct MemoryBookExportCover: View {
 }
 
 struct ExportFeatureView: View {
-    let name: String; let exportURL: URL?; let exportRecord: MemoryBookExportRecord?; let memoryBook: MemoryBookDocument?; let videoURL: URL?; let errorMessage: String?; let isExporting: Bool; let completedPages: Int; let totalPages: Int; let createPDF: () -> Void; let cancelPDF: () -> Void; let createVideo: () -> Void; let done: () -> Void; let back: () -> Void
+    let name: String; let exportURL: URL?; let exportRecord: MemoryBookExportRecord?; let memoryBook: MemoryBookDocument?; let errorMessage: String?; let isExporting: Bool; let completedPages: Int; let totalPages: Int; let createPDF: () -> Void; let cancelPDF: () -> Void; let done: () -> Void; let back: () -> Void
     var body: some View { TailorScreen(eyebrow: "EXPORT", title: isExporting ? "Making your archive." : (exportURL == nil ? "Ready when you are." : "Your archive is ready."), back: isExporting ? nil : back) {
         VStack(spacing: 18) {
             Group {
@@ -3949,8 +4148,6 @@ struct ExportFeatureView: View {
             }
             if isExporting { Button("Cancel rendering", action: cancelPDF).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay) }
             if !isExporting {
-                if let videoURL { ShareLink(item: videoURL) { Text("Share 30-second video") }.font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay) }
-                else { Button("Create 30-second memory video", action: createVideo).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay) }
                 Button("Return to timeline", action: back).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay)
             }
         }
@@ -3960,8 +4157,10 @@ struct ExportFeatureView: View {
 }
 
 struct ArchivesFeatureView: View {
-    let name: String; let pdfURL: URL?; let exportRecord: MemoryBookExportRecord?; let openArchive: () -> Void; let rescan: () -> Void; let restart: () -> Void; let delete: () -> Void
+    let name: String; let pdfURL: URL?; let exportRecord: MemoryBookExportRecord?; let resumeActionLabel: String; let canRescan: Bool; let openArchive: () -> Void; let rescan: () -> Void; let restart: () -> Void; let delete: () -> Void
     @State private var confirmDeletion = false
+    @State private var showAbout = false
+    @Environment(\.openURL) private var openURL
     var body: some View { TailorScreen(eyebrow: "TAILOR     SETTINGS", title: "Your\narchives.", back: nil) {
         Button(action: openArchive) {
             HStack(spacing: 12) {
@@ -3969,6 +4168,7 @@ struct ArchivesFeatureView: View {
                 VStack(alignment: .leading) {
                     Text("\(name)’s Life Archive").font(.callout.weight(.bold))
                     Text(archiveSubtitle).font(.footnote).foregroundStyle(TailorColor.ink.opacity(0.7)).accessibilityIdentifier("Archive metadata")
+                    Text(checkpointSummary).font(.caption).foregroundStyle(TailorColor.secondaryInk)
                 }
                 Spacer(); Image(systemName: "chevron.right")
             }
@@ -3983,19 +4183,100 @@ struct ArchivesFeatureView: View {
             }
         }
         VStack(spacing: 0) {
-            Button(action: rescan) {
-                HStack { Text("Rescan for new photos"); Spacer(); Image(systemName: "chevron.right").font(.caption) }
-                    .frame(minHeight: 48).overlay(Divider(), alignment: .bottom)
-            }.buttonStyle(.plain).accessibilityIdentifier("Rescan for new photos")
-            ForEach(["Manage photo access", "About Tailor"], id: \.self) { item in Button(action: {}) { HStack { Text(item); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48).overlay(Divider(), alignment: .bottom) }.buttonStyle(.plain) }
-            Button(role: .destructive) { confirmDeletion = true } label: { HStack { Text("Delete all local Tailor data"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48) }
+            if canRescan {
+                Button(action: rescan) {
+                    HStack { Text("Refresh new photos"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48)
+                }.buttonStyle(.plain).accessibilityIdentifier("Refresh new photos")
+                Rectangle().fill(TailorColor.line).frame(height: 1)
+            }
+            Button(action: { if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) } }) {
+                HStack { Text("Manage photo access"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48)
+            }.buttonStyle(.plain).accessibilityIdentifier("Manage photo access")
+            Rectangle().fill(TailorColor.line).frame(height: 1)
+            Button(action: { showAbout = true }) {
+                HStack { Text("About Tailor"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48)
+            }.buttonStyle(.plain).accessibilityIdentifier("About Tailor")
+            Rectangle().fill(TailorColor.line).frame(height: 1)
+            Button(role: .destructive) { confirmDeletion = true } label: {
+                HStack { Text("Delete all local Tailor data"); Spacer(); Image(systemName: "chevron.right").font(.caption) }.frame(minHeight: 48)
+            }
         }.foregroundStyle(TailorColor.ink)
         TailorInfoCard(symbol: "lock.shield", title: "Your system photos stay untouched.", message: "Deletion removes Tailor’s local matches, edits, and generated PDFs after its confirmation.")
-    }.safeAreaInset(edge: .bottom) { TailorPrimaryButton(title: "Create another archive", action: restart).padding(.horizontal, 24).padding(.vertical, 12).background(TailorColor.paper) }.alert("Delete all local Tailor data?", isPresented: $confirmDeletion) { Button("Delete local data", role: .destructive, action: delete); Button("Cancel", role: .cancel) {} } message: { Text("This removes Tailor’s local pet profiles, photo matches, decisions, edits, and generated PDFs from this iPhone. Your original Photos library will not be changed. This cannot be undone.") } }
+    }.safeAreaInset(edge: .bottom) { VStack(spacing: 8) { TailorPrimaryButton(title: resumeActionLabel, action: openArchive); Button("Create another archive", action: restart).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay) }.padding(.horizontal, 24).padding(.vertical, 12).background(TailorColor.paper) }.alert("Delete all local Tailor data?", isPresented: $confirmDeletion) { Button("Delete local data", role: .destructive, action: delete); Button("Cancel", role: .cancel) {} } message: { Text("This removes Tailor’s local pet profiles, photo matches, decisions, edits, and generated PDFs from this iPhone. Your original Photos library will not be changed. This cannot be undone.") }
+    .sheet(isPresented: $showAbout) { AboutTailorSheet() } }
+
+    private var checkpointSummary: String {
+        switch resumeActionLabel {
+        case "Continue profile": "Profile details are saved."
+        case "Choose photos": "Your profile and selected photo slots are saved."
+        case "Resume scan": "Scan progress is saved on this iPhone."
+        case "Review photos": "Your matches and review decisions are saved."
+        case "Continue draft": "Your latest completed planning step is saved."
+        case "Review story": "Your Story Plan draft is ready to review."
+        case "Choose style": "Your confirmed story is waiting for style and paper."
+        default: "Your editable document is saved locally."
+        }
+    }
 
     private var archiveSubtitle: String {
         guard let exportRecord else { return "Saved locally · Ready to continue" }
         let paper = exportRecord.pageSize == .letter ? "US Letter" : "A4"
         return "\(exportRecord.pageCount) pages · \(paper) · \(exportRecord.exportedAt.formatted(date: .abbreviated, time: .omitted))"
+    }
+}
+
+/// About / support surface reached from Settings. Required for App Store review:
+/// it exposes the app version, a working privacy-policy link and a support
+/// contact.
+struct AboutTailorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    private let privacyPolicyURL = URL(string: "https://shilverfox.github.io/tailor-legal/privacy-policy.html")
+    private let supportURL = URL(string: "https://shilverfox.github.io/tailor-legal/support.html")
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: TailorSpacing.l) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Tailor").font(TailorFont.display(32)).foregroundStyle(TailorColor.ink)
+                        Text("A private, on-device life archive for the pets you love.")
+                            .font(.callout).foregroundStyle(TailorColor.secondaryInk)
+                    }
+                    TailorInfoCard(symbol: "lock.shield", title: "Everything stays on this iPhone", message: "Photo matching runs locally. Tailor never uploads your library.")
+                    VStack(spacing: 0) {
+                        aboutRow("Privacy Policy", url: privacyPolicyURL)
+                        Rectangle().fill(TailorColor.line).frame(height: 1)
+                        aboutRow("Support", url: supportURL)
+                        Rectangle().fill(TailorColor.line).frame(height: 1)
+                        HStack { Text("Version"); Spacer(); Text(appVersion).foregroundStyle(TailorColor.secondaryInk) }
+                            .frame(minHeight: 48)
+                    }
+                    .foregroundStyle(TailorColor.ink)
+                }
+                .padding(.horizontal, TailorSpacing.l)
+                .padding(.top, TailorSpacing.m)
+            }
+            .background(TailorColor.paper.ignoresSafeArea())
+            .navigationTitle("About Tailor")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    @ViewBuilder private func aboutRow(_ title: String, url: URL?) -> some View {
+        Button(action: { if let url { openURL(url) } }) {
+            HStack { Text(title); Spacer(); Image(systemName: "arrow.up.right").font(.caption) }.frame(minHeight: 48)
+        }
+        .buttonStyle(.plain)
+        .disabled(url == nil)
+        .accessibilityIdentifier("About \(title)")
     }
 }

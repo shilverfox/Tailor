@@ -6,14 +6,54 @@ import CryptoKit
 enum PetSpecies: String, Codable, CaseIterable, Sendable { case dog, cat }
 enum ProfileLifecycle: String, Codable, Sendable { case draft, scanning, ready, exported, deleted }
 enum PhotoAccessScope: String, Codable, Sendable { case notDetermined, full, limited, denied, restricted }
-enum PhotoDecision: String, Codable, Sendable { case selected, needsReview, excluded }
+/// The persisted review decision has one canonical v2.2 state machine.
+/// `needsReview` was the pre-freeze spelling of `pending`; it remains accepted
+/// only while decoding older archives and is never emitted again.
+enum PhotoDecision: String, Codable, Sendable {
+    case pending, selected, excluded
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case Self.pending.rawValue, "needsReview": self = .pending
+        case Self.selected.rawValue: self = .selected
+        case Self.excluded.rawValue: self = .excluded
+        default:
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "Unknown photo decision: \(value)")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
 /// A local, user-controlled safety state. It intentionally describes the handling decision,
 /// never a diagnosis or a claim about what is happening in the photograph.
 enum PhotoSensitivityState: String, Codable, CaseIterable, Sendable {
     case normal
-    case needsSensitiveReview
-    case hiddenUntilUserDecides
+    case sensitive
     case neverUse
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case Self.normal.rawValue: self = .normal
+        case Self.sensitive.rawValue, "needsSensitiveReview", "hiddenUntilUserDecides": self = .sensitive
+        case Self.neverUse.rawValue: self = .neverUse
+        default:
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: "Unknown photo sensitivity: \(value)")
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// Why a photo was excluded from this archive. This affects Tailor's local index only;
@@ -37,10 +77,288 @@ struct ArchivePhotoDateRange: Codable, Equatable, Sendable {
 enum AlbumStyle: String, Codable, CaseIterable, Sendable { case warmPaper, quietNight, fieldNotes, cinema, filmAlbum }
 enum PDFPageSize: String, Codable, CaseIterable, Sendable { case letter, a4 }
 
+/// Independent version identifiers are persisted with local recognition data.
+/// Changing either value is an explicit migration boundary, never an implicit
+/// consequence of renaming a pet or editing lifecycle years.
+enum PetRecognitionVersion {
+    // v3: the inexpensive 256px image is used only for species detection;
+    // feature prints are generated from a 768px cropped animal region. This
+    // changes the embedding space and intentionally invalidates v1/v2 cache.
+    static let featureExtractorVersion = "vision-feature-print-v3"
+    // v3: candidate inclusion stays recall-first, while automatic selection
+    // needs agreement from Vision's animal recognizer and its independent image
+    // classifier. This keeps hard cases available for review but prevents known
+    // false positives such as macaques labelled as dogs from auto-entering an
+    // archive. It changes matching semantics, not the feature-print space.
+    static let matcherVersion = "tailor-pet-matcher-v3-dual-species-ranking"
+}
+
+struct FeatureEmbeddingKey: Codable, Hashable, Sendable {
+    var assetID: String
+    var featureExtractorVersion: String
+
+    init(assetID: String, featureExtractorVersion: String = PetRecognitionVersion.featureExtractorVersion) {
+        self.assetID = assetID
+        self.featureExtractorVersion = featureExtractorVersion
+    }
+
+    var storageKey: String { "\(featureExtractorVersion)|\(assetID)" }
+}
+
+struct RecognitionGeneration: Codable, Equatable, Sendable {
+    var matchGenerationID: String
+    var petProfileID: UUID
+    var species: PetSpecies
+    var referenceSetFingerprint: String
+    var matcherVersion: String
+    var createdAt: Date
+
+    init(
+        petProfileID: UUID,
+        species: PetSpecies,
+        referenceSetFingerprint: String,
+        matcherVersion: String = PetRecognitionVersion.matcherVersion,
+        createdAt: Date = .now
+    ) {
+        self.petProfileID = petProfileID
+        self.species = species
+        self.referenceSetFingerprint = referenceSetFingerprint
+        self.matcherVersion = matcherVersion
+        self.createdAt = createdAt
+        // The feature-extractor version is part of the generation fingerprint so
+        // that ANY change to the embedding space (e.g. whole-frame → cropped
+        // animal region) yields a new generation ID and forces a full rematch of
+        // existing archives — not just a matcher change. Without this, bumping
+        // featureExtractorVersion silently leaves old photos on stale results.
+        let source = [petProfileID.uuidString, species.rawValue, referenceSetFingerprint, matcherVersion, PetRecognitionVersion.featureExtractorVersion].joined(separator: "|")
+        self.matchGenerationID = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func referenceSetFingerprint(_ identifiers: [String]) -> String {
+        let canonical = Array(Set(identifiers)).sorted().joined(separator: "\u{1F}")
+        return SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+enum PhotoDecisionSource: String, Codable, Sendable {
+    case automatic, human, manualImport
+}
+
+struct RecognitionMatchRecord: Codable, Equatable, Sendable {
+    var matchGenerationID: String
+    var assetID: String
+    var confidence: Double
+    var automaticDecision: PhotoDecision
+    var createdAt: Date
+
+    var storageKey: String { "\(matchGenerationID)|\(assetID)" }
+}
+
+enum ManualAssetCopyState: String, Codable, Sendable {
+    case privateCopy, mappedToPhotoLibrary, missing
+}
+
+/// A manual import stores only a sandbox-relative path. Absolute container URLs
+/// are not stable across installs/restores and therefore never enter the model.
+struct ManualAssetReference: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    private(set) var relativePath: String
+    var contentFingerprint: String
+    var importedAt: Date
+    var copyState: ManualAssetCopyState
+    var resolvedPHAssetIdentifier: String?
+
+    init(
+        id: UUID = UUID(),
+        relativePath: String,
+        contentFingerprint: String,
+        importedAt: Date = .now,
+        copyState: ManualAssetCopyState = .privateCopy,
+        resolvedPHAssetIdentifier: String? = nil
+    ) {
+        self.id = id
+        self.relativePath = Self.sandboxRelativePath(relativePath, fallbackID: id)
+        self.contentFingerprint = contentFingerprint
+        self.importedAt = importedAt
+        self.copyState = copyState
+        self.resolvedPHAssetIdentifier = resolvedPHAssetIdentifier
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, relativePath, contentFingerprint, importedAt, copyState, resolvedPHAssetIdentifier
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try values.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.init(
+            id: id,
+            relativePath: try values.decode(String.self, forKey: .relativePath),
+            contentFingerprint: try values.decode(String.self, forKey: .contentFingerprint),
+            importedAt: try values.decodeIfPresent(Date.self, forKey: .importedAt) ?? .now,
+            copyState: try values.decodeIfPresent(ManualAssetCopyState.self, forKey: .copyState) ?? .privateCopy,
+            resolvedPHAssetIdentifier: try values.decodeIfPresent(String.self, forKey: .resolvedPHAssetIdentifier)
+        )
+    }
+
+    /// Persisted paths are always relative to Tailor's sandbox root. Absolute
+    /// container URLs are unstable, while `..` and URL schemes could escape
+    /// the intended ManualImports directory when a path is later resolved.
+    private static func sandboxRelativePath(_ rawValue: String, fallbackID: UUID) -> String {
+        let normalizedSeparators = rawValue.replacingOccurrences(of: "\\", with: "/")
+        let components = normalizedSeparators.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        let isUnsafe = normalizedSeparators.hasPrefix("/")
+            || normalizedSeparators.hasPrefix("~")
+            || normalizedSeparators.contains("://")
+            || components.contains("..")
+        let cleanComponents = components.filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+
+        if !isUnsafe, !cleanComponents.isEmpty {
+            return cleanComponents.joined(separator: "/")
+        }
+
+        let unsafeLeaf = cleanComponents.last ?? "\(fallbackID.uuidString).asset"
+        let safeLeaf = unsafeLeaf
+            .replacingOccurrences(of: ":", with: "-")
+            .replacingOccurrences(of: "\u{0}", with: "")
+        return "ManualImports/Recovered/\(safeLeaf.isEmpty ? "\(fallbackID.uuidString).asset" : safeLeaf)"
+    }
+}
+
+/// Frozen product boundary for the denied/restricted PHPicker flow. Keeping
+/// this policy outside SwiftUI makes the 3/500 gates identical for UI,
+/// persistence and recovery code.
+enum ManualImportPolicy {
+    static let minimumCount = 3
+    static let maximumCount = 500
+
+    static func canContinue(count: Int) -> Bool {
+        (minimumCount...maximumCount).contains(count)
+    }
+
+    static func remainingCapacity(existingCount: Int) -> Int {
+        max(0, maximumCount - max(0, existingCount))
+    }
+
+    static func acceptedPrefix<T>(_ proposed: [T], existingCount: Int) -> [T] {
+        Array(proposed.prefix(remainingCapacity(existingCount: existingCount)))
+    }
+}
+
+/// Manual import deliberately has no scanner dependency. Its only successful
+/// destination is Photo Review, where every imported file starts pending.
+enum ManualImportFlowPolicy {
+    static func checkpoint(forValidSelectionCount count: Int) -> ArchiveCheckpointStage {
+        ManualImportPolicy.canContinue(count: count) ? .review : .references
+    }
+
+    static func resumeRoute(forValidSelectionCount count: Int) -> ArchiveResumeRoute {
+        checkpoint(forValidSelectionCount: count).resumeRoute
+    }
+}
+
+enum ArchiveResumeRoute: String, Codable, Sendable {
+    case profile, references, scan, photoReview, smartDraft, storyPlan, bookStyle, bookPreview
+
+    var actionLabel: String {
+        switch self {
+        case .profile: "Continue profile"
+        case .references: "Choose photos"
+        case .scan: "Resume scan"
+        case .photoReview: "Review photos"
+        case .smartDraft: "Continue draft"
+        case .storyPlan: "Review story"
+        case .bookStyle: "Choose style"
+        case .bookPreview: "Continue editing"
+        }
+    }
+}
+
+enum ArchiveCheckpointStage: String, Codable, Sendable {
+    case profile, references, scan, review, smartDraft, storyPlan, stylePending, documentReady
+
+    var resumeRoute: ArchiveResumeRoute {
+        switch self {
+        case .profile: .profile
+        case .references: .references
+        case .scan: .scan
+        case .review: .photoReview
+        case .smartDraft: .smartDraft
+        case .storyPlan: .storyPlan
+        case .stylePending: .bookStyle
+        case .documentReady: .bookPreview
+        }
+    }
+}
+
+/// One stage produces exactly one resume route by construction. Optional
+/// cursors are stage-local recovery hints and do not alter routing semantics.
+struct ArchiveCheckpoint: Codable, Equatable, Sendable {
+    var stage: ArchiveCheckpointStage
+    var smartDraftStepCursor: String?
+    var updatedAt: Date
+
+    init(stage: ArchiveCheckpointStage, smartDraftStepCursor: String? = nil, updatedAt: Date = .now) {
+        self.stage = stage
+        self.smartDraftStepCursor = smartDraftStepCursor
+        self.updatedAt = updatedAt
+    }
+
+    var resumeRoute: ArchiveResumeRoute { stage.resumeRoute }
+}
+
+enum ReturnSourceScreen: String, Codable, Sendable {
+    case bookPreview, bookCheck, finalPreview, pageEditorStyle
+}
+
+struct BookCheckIssueLocator: Codable, Equatable, Sendable {
+    var ruleID: String
+    var pageID: UUID?
+    var elementID: UUID?
+    var formerIssueIndex: Int
+}
+
+struct ReturnContextFrame: Codable, Equatable, Sendable {
+    var source: ReturnSourceScreen
+    var logicalPageID: UUID?
+    var formerPageIndex: Int?
+    var paperSize: PDFPageSize
+    var issueLocator: BookCheckIssueLocator?
+}
+
+struct ReturnContextStack: Codable, Equatable, Sendable {
+    private(set) var frames: [ReturnContextFrame]
+
+    init(frames: [ReturnContextFrame] = []) { self.frames = frames }
+    var top: ReturnContextFrame? { frames.last }
+    var isEmpty: Bool { frames.isEmpty }
+
+    mutating func push(_ frame: ReturnContextFrame) { frames.append(frame) }
+    @discardableResult mutating func pop() -> ReturnContextFrame? { frames.popLast() }
+    mutating func removeAll() { frames.removeAll() }
+}
+
 /// Deterministic non-personal book for the explicit UI-automation visual route.
 /// It is never constructed by a production archive flow.
 enum MemoryBookVisualQAFixture {
+    private static let fixedRevisionID = UUID(uuidString: "00000000-0000-0000-0000-000000000901")!
+
     static func make(style: AlbumStyle, paper: PDFPageSize) -> MemoryBookDocument {
+        let data = serializedData(style: style, paper: paper)
+        return (try? JSONDecoder().decode(MemoryBookDocument.self, from: data)) ?? build(style: style, paper: paper)
+    }
+
+    /// Reader and PDF fixtures are instantiated from these identical bytes.
+    /// This prevents a consumer from silently rebuilding a similar-looking,
+    /// but different, document revision during three-surface QA.
+    static func serializedData(style: AlbumStyle, paper: PDFPageSize) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return (try? encoder.encode(build(style: style, paper: paper))) ?? Data()
+    }
+
+    private static func build(style: AlbumStyle, paper: PDFPageSize) -> MemoryBookDocument {
+        let revisionDate = Date(timeIntervalSince1970: 1_735_689_600)
         let profile = PetProfile(id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!, name: "Milo", species: .dog, arrivalYear: 2017, departureYear: 2024, lifecycle: .ready, albumStyle: style)
         // Each rendered placement uses its own source asset.  This deliberately
         // exercises seven distinct crops without turning the visual fixture
@@ -52,6 +370,7 @@ enum MemoryBookVisualQAFixture {
                 decision: .selected,
                 confidence: 1,
                 createdAt: Date(timeIntervalSince1970: 1_704_067_200 + TimeInterval(i * 86_400)),
+                pixelSize: i.isMultiple(of: 2) ? CGSize(width: 1_800, height: 3_200) : CGSize(width: 3_200, height: 1_800),
                 // The deterministic bitmap generator draws its explicit
                 // subject marker in this centre region. Supplying that known
                 // fixture metadata keeps rendering tests focused on output
@@ -66,14 +385,108 @@ enum MemoryBookVisualQAFixture {
         // composition, so use explicit text frames rather than pretending a
         // three-line passage belongs in a one-line subtitle slot.
         pages[1].elements = [
-            MemoryBookElement(kind: .text, text: "For Milo", normalizedFrame: CGRect(x: 0.12, y: 0.20, width: 0.68, height: 0.10), zIndex: 12, textStyle: .large, textField: .dedicationMessage),
-            MemoryBookElement(kind: .text, text: "For every ordinary morning,\nevery walk, and every place\nthat still feels like home.", normalizedFrame: CGRect(x: 0.12, y: 0.37, width: 0.68, height: 0.23), zIndex: 11)
+            MemoryBookElement(kind: .text, text: "For Milo", normalizedFrame: CGRect(x: 0.12, y: 0.20, width: 0.68, height: 0.10), zIndex: 12, textStyle: .large, textFontScale: 1.137, textField: .dedicationMessage, updatedAt: revisionDate),
+            MemoryBookElement(kind: .text, text: "مرحبا Milo 👨‍👩‍👧‍👦\ne\u{301} · 点点 — kept exactly as written.\nEvery place still feels like home.", normalizedFrame: CGRect(x: 0.12, y: 0.37, width: 0.72, height: 0.28), zIndex: 11, updatedAt: revisionDate)
         ]
         pages[2].elements = [
             MemoryBookElement(kind: .text, text: "Contents", normalizedFrame: CGRect(x: 0.10, y: 0.10, width: 0.70, height: 0.09), zIndex: 12, textStyle: .large),
             MemoryBookElement(kind: .text, text: "Early days · 4\nDays together · 5\nKept close · 7", normalizedFrame: CGRect(x: 0.12, y: 0.30, width: 0.70, height: 0.34), zIndex: 11)
         ]
-        return MemoryBookDocument(profile: profile, photos: photos, chapters: [], pages: pages, style: style, pageSize: paper)
+        if let coverPhotoIndex = pages[0].elements.firstIndex(where: { $0.kind == .image }) {
+            pages[0].elements[coverPhotoIndex].rotationDegrees = 6
+        }
+        // Exercise the renderer's difficult geometry with explicit fit/fill,
+        // rotation and overlapping z-order on one deterministic page.
+        let imageIndices = pages[4].elements.indices.filter { pages[4].elements[$0].kind == .image }
+        if imageIndices.count >= 4 {
+            pages[4].elements[imageIndices[0]].normalizedFrame = CGRect(x: 0.08, y: 0.32, width: 0.44, height: 0.34)
+            pages[4].elements[imageIndices[0]].imageContentMode = .fit
+            pages[4].elements[imageIndices[0]].rotationDegrees = -8
+            pages[4].elements[imageIndices[0]].zIndex = 4
+            pages[4].elements[imageIndices[1]].normalizedFrame = CGRect(x: 0.36, y: 0.38, width: 0.46, height: 0.34)
+            pages[4].elements[imageIndices[1]].imageContentMode = .fill
+            pages[4].elements[imageIndices[1]].rotationDegrees = 12
+            pages[4].elements[imageIndices[1]].zIndex = 8
+            pages[4].elements[imageIndices[2]].imageContentMode = .fit
+            pages[4].elements[imageIndices[3]].imageContentMode = .fill
+        }
+        for pageIndex in pages.indices {
+            for elementIndex in pages[pageIndex].elements.indices {
+                pages[pageIndex].elements[elementIndex].id = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 700 + pageIndex * 20 + elementIndex))!
+                pages[pageIndex].elements[elementIndex].updatedAt = revisionDate
+            }
+        }
+        return MemoryBookDocument(profile: profile, photos: photos, chapters: [], pages: pages, style: style, pageSize: paper, updatedAt: revisionDate, documentRevisionID: fixedRevisionID)
+    }
+}
+
+/// Deterministic non-personal book for approved-baseline comparison. Unlike
+/// `MemoryBookVisualQAFixture`, this goes through `MemoryBookBuilder.build`
+/// and never hand-edits frame, crop, rotation, z-index or Fit/Fill.
+enum MemoryBookProductionDefaultFixture {
+    private static let fixedRevisionID = UUID(uuidString: "00000000-0000-0000-0000-000000000911")!
+
+    static func make(style: AlbumStyle = .warmPaper, paper: PDFPageSize) -> MemoryBookDocument {
+        let data = serializedData(style: style, paper: paper)
+        return (try? JSONDecoder().decode(MemoryBookDocument.self, from: data)) ?? build(style: style, paper: paper)
+    }
+
+    static func serializedData(style: AlbumStyle = .warmPaper, paper: PDFPageSize) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return (try? encoder.encode(build(style: style, paper: paper))) ?? Data()
+    }
+
+    private static func build(style: AlbumStyle, paper: PDFPageSize) -> MemoryBookDocument {
+        let revisionDate = Date(timeIntervalSince1970: 1_735_689_600)
+        let profile = PetProfile(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000111")!,
+            name: "Milo",
+            species: .dog,
+            arrivalYear: 2017,
+            departureYear: 2024,
+            lifecycle: .ready,
+            albumStyle: style
+        )
+        let photos = [
+            ArchivePhoto(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000211")!,
+                assetLocalIdentifier: "fixture-photo-1",
+                decision: .selected,
+                confidence: 1,
+                createdAt: Date(timeIntervalSince1970: 1_483_228_800),
+                pixelSize: CGSize(width: 3_200, height: 1_800),
+                subjectRegion: CGRect(x: 0.38, y: 0.38, width: 0.24, height: 0.24)
+            ),
+            ArchivePhoto(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000212")!,
+                assetLocalIdentifier: "fixture-photo-2",
+                decision: .selected,
+                confidence: 1,
+                createdAt: Date(timeIntervalSince1970: 1_609_459_200),
+                pixelSize: CGSize(width: 1_800, height: 3_200),
+                subjectRegion: CGRect(x: 0.38, y: 0.38, width: 0.24, height: 0.24)
+            )
+        ]
+        let chapter = Chapter(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000311")!,
+            title: "Days together",
+            dateLabel: "2019-2021",
+            photoIDs: photos.map(\.id),
+            isHidden: false,
+            sortOrder: 0
+        )
+        var document = MemoryBookBuilder.build(profile: profile, photos: photos, chapters: [chapter], style: style, pageSize: paper)
+        document.documentRevisionID = fixedRevisionID
+        document.updatedAt = revisionDate
+        for pageIndex in document.pages.indices {
+            document.pages[pageIndex].id = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 910 + pageIndex))!
+            for elementIndex in document.pages[pageIndex].elements.indices {
+                document.pages[pageIndex].elements[elementIndex].id = UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 1_100 + pageIndex * 20 + elementIndex))!
+                document.pages[pageIndex].elements[elementIndex].updatedAt = revisionDate
+            }
+        }
+        return document
     }
 }
 
@@ -91,6 +504,8 @@ enum MemoryBookVisualQAAsset {
         let size: CGSize
         if identifier.hasPrefix("fixture-photo-") {
             let number = Int(identifier.drop(while: { !$0.isNumber })) ?? 1
+            // Keep the in-memory visual proxy modest; `ArchivePhoto.pixelSize`
+            // records the original print-resolution source metadata.
             size = number.isMultiple(of: 2) ? CGSize(width: 900, height: 1_600) : CGSize(width: 1_600, height: 900)
         } else if identifier.contains("landscape") {
             size = CGSize(width: 1_600, height: 900)
@@ -228,6 +643,17 @@ struct MemoryBookTextLayoutSpec: Codable, Equatable, Sendable {
             ?? UIFont.systemFont(ofSize: fontSize)
     }
 
+    /// UIKit and Core Text must resolve the persisted name to the same face.
+    /// Private descriptor names such as `.NewYork-Regular` can be accepted by
+    /// UIKit while Core Text silently substitutes Times, which changes wraps
+    /// between Preview and PDF.
+    var hasSharedFontResolution: Bool {
+        guard let uiFont = UIFont(name: fontPostScriptName, size: fontSize),
+              uiFont.fontName == fontPostScriptName else { return false }
+        let coreTextFont = CTFontCreateWithName(fontPostScriptName as CFString, fontSize, nil)
+        return CTFontCopyPostScriptName(coreTextFont) as String == fontPostScriptName
+    }
+
     func paragraphStyle() -> NSMutableParagraphStyle {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = alignment.nsTextAlignment
@@ -246,6 +672,35 @@ struct MemoryBookTextLayoutSpec: Codable, Equatable, Sendable {
             .kern: kern,
             .paragraphStyle: paragraphStyle()
         ])
+    }
+
+    /// Uniformly lifts a screen-sized layout back into canonical print-page
+    /// coordinates. Core Text then shapes and positions glyphs at the same
+    /// physical font metrics as PDF before the graphics context scales the
+    /// result into the Reader canvas.
+    func scaled(by factor: CGFloat) -> MemoryBookTextLayoutSpec {
+        guard factor.isFinite, factor > 0, abs(factor - 1) > 0.000_001 else { return self }
+        func scale(_ rect: CGRect) -> CGRect {
+            CGRect(
+                x: rect.minX * factor,
+                y: rect.minY * factor,
+                width: rect.width * factor,
+                height: rect.height * factor
+            )
+        }
+        return .init(
+            fontPostScriptName: fontPostScriptName,
+            fallbackPostScriptName: fallbackPostScriptName,
+            fontSize: fontSize * factor,
+            lineHeight: lineHeight * factor,
+            kern: kern * factor,
+            paragraphSpacing: paragraphSpacing * factor,
+            alignment: alignment,
+            writingDirection: writingDirection,
+            textRect: scale(textRect),
+            editableRect: scale(editableRect),
+            protectedRects: protectedRects.map(scale)
+        )
     }
 }
 
@@ -266,6 +721,35 @@ enum MemoryBookTextRenderer {
 
     static func attributedString(for snapshot: MemoryBookTextLayoutSnapshot, color: UIColor) -> NSAttributedString {
         snapshot.spec.attributedString(snapshot.value, color: color)
+    }
+
+    /// Draws in UIKit's top-left coordinate system. Reader and PDF both call
+    /// this exact CoreText path so glyph origins, baselines and wrapping are
+    /// no longer delegated to two different layout engines.
+    static func draw(
+        snapshot: MemoryBookTextLayoutSnapshot,
+        color: UIColor,
+        in rect: CGRect,
+        context: CGContext,
+        canonicalScale: CGFloat = 1
+    ) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        let scale = canonicalScale.isFinite && canonicalScale > 0 ? canonicalScale : 1
+        let drawingSpec = snapshot.spec.scaled(by: scale)
+        let framesetter = CTFramesetterCreateWithAttributedString(
+            drawingSpec.attributedString(snapshot.value, color: color)
+        )
+        context.saveGState()
+        context.translateBy(x: rect.minX, y: rect.minY)
+        context.scaleBy(x: 1 / scale, y: 1 / scale)
+        context.textMatrix = .identity
+        let drawingRect = CGRect(origin: .zero, size: CGSize(width: rect.width * scale, height: rect.height * scale))
+        context.translateBy(x: 0, y: drawingRect.maxY)
+        context.scaleBy(x: 1, y: -1)
+        let path = CGPath(rect: drawingRect, transform: nil)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(), path, nil)
+        CTFrameDraw(frame, context)
+        context.restoreGState()
     }
 }
 
@@ -365,17 +849,28 @@ struct MemoryBookTextMeasurement: Codable, Equatable, Sendable {
     let availableHeight: CGFloat
     let occupiedRect: CGRect
     let lineBoxes: [MemoryBookTextLineBox]
+    /// The range consumed by a Core Text frame constrained to the authored
+    /// text box. Optional values preserve old render-manifest decoding.
+    let consumedUTF16Length: Int?
+    let totalUTF16Length: Int?
 
-    init(requiredLines: Int, availableLines: Int, requiredHeight: CGFloat, availableHeight: CGFloat, occupiedRect: CGRect = .zero, lineBoxes: [MemoryBookTextLineBox] = []) {
+    init(requiredLines: Int, availableLines: Int, requiredHeight: CGFloat, availableHeight: CGFloat, occupiedRect: CGRect = .zero, lineBoxes: [MemoryBookTextLineBox] = [], consumedUTF16Length: Int? = nil, totalUTF16Length: Int? = nil) {
         self.requiredLines = requiredLines
         self.availableLines = availableLines
         self.requiredHeight = requiredHeight
         self.availableHeight = availableHeight
         self.occupiedRect = occupiedRect
         self.lineBoxes = lineBoxes
+        self.consumedUTF16Length = consumedUTF16Length
+        self.totalUTF16Length = totalUTF16Length
     }
 
-    var overflows: Bool { requiredHeight > availableHeight + 0.25 }
+    var overflows: Bool {
+        if let consumedUTF16Length, let totalUTF16Length {
+            return consumedUTF16Length < totalUTF16Length
+        }
+        return requiredHeight > availableHeight + 0.25
+    }
 }
 
 /// Validation is deliberately evaluated from the in-memory editing draft. It
@@ -390,8 +885,10 @@ struct MemoryBookTextDraftValidation: Equatable, Sendable {
 
 /// A print-focused quality signal computed from the exact text layout and
 /// colours used by Editor, Reader and PDF. Low contrast remains a suggestion
-/// so deliberate artistic choices stay possible; the 11pt renderer floor is a
-/// hard invariant and is reported here for auditability.
+/// so deliberate artistic choices stay possible; the 11pt print-page floor is
+/// a hard invariant in canonical physical-page coordinates and is reported
+/// here for auditability. A scaled Reader canvas may use a smaller drawing
+/// point value without weakening the print rule.
 struct MemoryBookTextReadabilityAssessment: Equatable, Sendable {
     static let minimumPrintPointSize: CGFloat = 11
     /// Print paper, texture and antialiasing differ from an emissive screen.
@@ -529,8 +1026,15 @@ struct MemoryBookPageStyle: Codable, Equatable, Sendable {
 struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
     static let paperInsetRatio: CGFloat = 18 / 612
     static let safeInsetRatio: CGFloat = 0.07
+    /// The minimum belongs to the authored, physical page. It must not be
+    /// applied again after that page has been scaled down for Reader/Editor.
+    /// Doing so changes wrapping and glyph positions between screen and PDF.
+    static let minimumPrintFontSize: CGFloat = MemoryBookTextReadabilityAssessment.minimumPrintPointSize
 
     let pageSize: CGSize
+    /// The authored output size (A4 or Letter), retained even when `pageSize`
+    /// is a smaller Reader/Editor canvas.
+    let canonicalPageSize: CGSize
     let pageRect: CGRect
     let paperRect: CGRect
     let safeRect: CGRect
@@ -548,6 +1052,7 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
 
     init(pageSize: CGSize, style: MemoryBookPageStyle, watermarked: Bool = false) {
         self.pageSize = pageSize
+        canonicalPageSize = pageSize
         pageRect = CGRect(origin: .zero, size: pageSize)
         paperRect = pageRect.insetBy(dx: pageSize.width * Self.paperInsetRatio, dy: pageSize.width * Self.paperInsetRatio)
         safeRect = paperRect.insetBy(dx: paperRect.width * Self.safeInsetRatio, dy: paperRect.height * Self.safeInsetRatio)
@@ -565,6 +1070,7 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
 
     init(page: MemoryBookPage, document: MemoryBookDocument, pageSize: CGSize, watermarked: Bool = false) {
         self.pageSize = pageSize
+        canonicalPageSize = Self.points(for: document.pageSize)
         pageRect = CGRect(origin: .zero, size: pageSize)
         paperRect = pageRect.insetBy(dx: pageSize.width * Self.paperInsetRatio, dy: pageSize.width * Self.paperInsetRatio)
         safeRect = paperRect.insetBy(dx: paperRect.width * Self.safeInsetRatio, dy: paperRect.height * Self.safeInsetRatio)
@@ -586,7 +1092,7 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
             return Self.makeTextLayout(
                 element: element,
                 pageKind: page.kind,
-                pageSize: pageSize,
+                canonicalPageSize: canonicalPageSize,
                 paperRect: paperRect,
                 safeRect: safeRect,
                 style: resolvedStyle,
@@ -660,18 +1166,52 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
         }
     }
 
-    func fontSize(for element: MemoryBookElement, in rect: CGRect) -> CGFloat {
+    /// Reader/Editor use this to let Core Text shape at canonical physical
+    /// metrics while the graphics context performs one uniform page scale.
+    /// PDF plans naturally resolve to 1.
+    var canonicalTextRenderScale: CGFloat {
+        let canonicalPaperWidth = canonicalPageSize.width * (1 - 2 * Self.paperInsetRatio)
+        guard paperRect.width > 0, canonicalPaperWidth > 0 else { return 1 }
+        return canonicalPaperWidth / paperRect.width
+    }
+
+    func fontSize(for element: MemoryBookElement, in _: CGRect) -> CGFloat {
+        // Font size is tied to the physical paper, not to a text box's height.
+        // Otherwise making a text frame taller also enlarged its font and Fit text
+        // could never create additional usable lines.
+        return Self.renderedFontSize(
+            for: element,
+            token: fontToken(for: element),
+            paperRect: paperRect,
+            canonicalPageSize: canonicalPageSize
+        )
+    }
+
+    /// Resolves typography once in physical page coordinates and then scales
+    /// it into the current render canvas. Reader may be ~258pt wide while PDF
+    /// is 595/612pt wide; both therefore keep the same normalized glyph size,
+    /// line breaks and text bounding box. Editor affordances may enforce their
+    /// own minimum hit/readability sizes, but must not mutate this render value.
+    static func renderedFontSize(
+        for element: MemoryBookElement,
+        token: MemoryBookFontToken,
+        paperRect: CGRect,
+        canonicalPageSize: CGSize
+    ) -> CGFloat {
         let multiplier: CGFloat
         switch element.textStyle {
         case .small: multiplier = 0.82
         case .standard: multiplier = 1
         case .large: multiplier = 1.22
         }
-        // Font size is tied to the physical paper, not to a text box's height.
-        // Otherwise making a text frame taller also enlarged its font and Fit text
-        // could never create additional usable lines.
-        let base = paperRect.width * (fontToken(for: element) == .display ? 0.045 : 0.026)
-        return max(11, base * multiplier * element.textFontScale)
+        let canonicalPaperWidth = canonicalPageSize.width * (1 - 2 * paperInsetRatio)
+        guard canonicalPaperWidth > 0 else { return minimumPrintFontSize }
+        let ratio: CGFloat = token == .display ? 0.045 : 0.026
+        let canonicalPrintSize = max(
+            minimumPrintFontSize,
+            canonicalPaperWidth * ratio * multiplier * element.textFontScale
+        )
+        return canonicalPrintSize * paperRect.width / canonicalPaperWidth
     }
 
     func textLayout(for element: MemoryBookElement) -> MemoryBookTextLayoutSnapshot? {
@@ -722,7 +1262,7 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
     static func makeTextLayout(
         element: MemoryBookElement,
         pageKind: MemoryBookPageKind,
-        pageSize: CGSize,
+        canonicalPageSize: CGSize,
         paperRect: CGRect,
         safeRect: CGRect,
         style: MemoryBookPageStyle,
@@ -734,14 +1274,13 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
             width: element.normalizedFrame.width * paperRect.width,
             height: element.normalizedFrame.height * paperRect.height
         )
-        let multiplier: CGFloat
-        switch element.textStyle {
-        case .small: multiplier = 0.82
-        case .standard: multiplier = 1
-        case .large: multiplier = 1.22
-        }
         let token: MemoryBookFontToken = element.zIndex >= 10 ? .display : .body
-        let fontSize = max(11, paperRect.width * (token == .display ? 0.045 : 0.026) * multiplier * element.textFontScale)
+        let fontSize = renderedFontSize(
+            for: element,
+            token: token,
+            paperRect: paperRect,
+            canonicalPageSize: canonicalPageSize
+        )
         let resolvedFont = element.textFont.font(size: fontSize, fallback: token)
         let fallbackPostScript = token == .display
             ? MemoryBookTypography.displayFallbackPostScriptName
@@ -827,13 +1366,39 @@ struct MemoryBookPageRenderPlan: Codable, Equatable, Sendable {
         let occupiedHeight = CGFloat(requiredLines) * spec.lineHeight
             + CGFloat(paragraphBreaks) * spec.paragraphSpacing
         let occupied = CGRect(x: spec.textRect.minX, y: spec.textRect.minY, width: min(width, bounds.width), height: occupiedHeight)
+
+        // Overflow is decided by the exact Core Text frame used by both
+        // renderers, not by an estimated line/character threshold. The
+        // visible range is UTF-16 based (like NSAttributedString), so a value
+        // is accepted only when every code unit—including a complete emoji or
+        // other composed grapheme—was consumed by the authored frame.
+        let constrainedPath = CGPath(
+            rect: CGRect(x: 0, y: 0, width: width, height: max(0.25, spec.textRect.height)),
+            transform: nil
+        )
+        let constrainedFrame = CTFramesetterCreateFrame(
+            typesetter,
+            CFRange(location: 0, length: attributed.length),
+            constrainedPath,
+            nil
+        )
+        let visibleRange = CTFrameGetVisibleStringRange(constrainedFrame)
+        var consumedUTF16Length = min(attributed.length, max(0, visibleRange.location + visibleRange.length))
+        if consumedUTF16Length > 0, consumedUTF16Length < attributed.length {
+            let lastComposedRange = (text as NSString).rangeOfComposedCharacterSequence(at: consumedUTF16Length - 1)
+            if NSMaxRange(lastComposedRange) > consumedUTF16Length {
+                consumedUTF16Length = lastComposedRange.location
+            }
+        }
         return MemoryBookTextMeasurement(
             requiredLines: requiredLines,
             availableLines: availableLines,
             requiredHeight: occupiedHeight,
             availableHeight: spec.textRect.height,
             occupiedRect: occupied,
-            lineBoxes: lineBoxes
+            lineBoxes: lineBoxes,
+            consumedUTF16Length: consumedUTF16Length,
+            totalUTF16Length: attributed.length
         )
     }
 }
@@ -899,16 +1464,36 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
     /// A local grouping key for near-identical burst/re-import candidates. It
     /// never changes the user's inclusion/exclusion decision.
     var visualDuplicateGroupID: String?
+    /// Match provenance is separate from the reusable embedding. A changed
+    /// species/reference set/matcher creates a new generation without deleting
+    /// the asset's feature vector.
+    var matchGenerationID: String?
+    var decisionSource: PhotoDecisionSource
+    /// A human choice from an older generation is retained for explanation but
+    /// is deliberately ineligible until the user confirms it again.
+    var staleDecision: PhotoDecision?
+    var sensitiveApprovedAt: Date?
+    var isInHiddenPeriod: Bool
+    var manualAssetID: UUID?
 
     var aspectRatio: CGFloat {
         guard let pixelSize, pixelSize.width > 0, pixelSize.height > 0 else { return 1 }
         return pixelSize.width / pixelSize.height
     }
 
-    /// A single source of truth used by timeline, preview, and PDF generation.
-    /// Sensitive content must be explicitly restored to `.normal` before it can be used.
+    var requiresSensitiveApproval: Bool {
+        sensitivityState == .sensitive
+    }
+
+    /// A single source of truth used by candidate planning, timeline, preview,
+    /// and PDF generation. Legacy sensitive states remain decodable, but may be
+    /// selected only after an auditable approval timestamp exists.
     var isEligibleForArchive: Bool {
-        decision == .selected && sensitivityState == .normal
+        guard decision == .selected,
+              !isInHiddenPeriod,
+              staleDecision == nil,
+              sensitivityState != .neverUse else { return false }
+        return sensitivityState == .normal || (requiresSensitiveApproval && sensitiveApprovedAt != nil)
     }
 
     init(
@@ -924,7 +1509,13 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         visualHash: UInt64? = nil,
         recognitionEvidence: PetRecognitionEvidence? = nil,
         subjectRegion: CGRect? = nil,
-        visualDuplicateGroupID: String? = nil
+        visualDuplicateGroupID: String? = nil,
+        matchGenerationID: String? = nil,
+        decisionSource: PhotoDecisionSource = .automatic,
+        staleDecision: PhotoDecision? = nil,
+        sensitiveApprovedAt: Date? = nil,
+        isInHiddenPeriod: Bool = false,
+        manualAssetID: UUID? = nil
     ) {
         self.id = id
         self.assetLocalIdentifier = assetLocalIdentifier
@@ -939,11 +1530,18 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         self.recognitionEvidence = recognitionEvidence
         self.subjectRegion = subjectRegion.map(FocalCropPolicy.normalizedSubjectRegion)
         self.visualDuplicateGroupID = visualDuplicateGroupID
+        self.matchGenerationID = matchGenerationID
+        self.decisionSource = decisionSource
+        self.staleDecision = staleDecision
+        self.sensitiveApprovedAt = sensitiveApprovedAt
+        self.isInHiddenPeriod = isInHiddenPeriod
+        self.manualAssetID = manualAssetID
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, assetLocalIdentifier, decision, confidence, createdAt
         case sensitivityState, excludedReason, localDateRange, pixelSize, visualHash, recognitionEvidence, subjectRegion, visualDuplicateGroupID
+        case matchGenerationID, decisionSource, staleDecision, sensitiveApprovedAt, isInHiddenPeriod, manualAssetID
     }
 
     init(from decoder: Decoder) throws {
@@ -962,6 +1560,38 @@ struct ArchivePhoto: Identifiable, Codable, Equatable, Sendable {
         recognitionEvidence = try values.decodeIfPresent(PetRecognitionEvidence.self, forKey: .recognitionEvidence)
         subjectRegion = try values.decodeIfPresent(CGRect.self, forKey: .subjectRegion).map(FocalCropPolicy.normalizedSubjectRegion)
         visualDuplicateGroupID = try values.decodeIfPresent(String.self, forKey: .visualDuplicateGroupID)
+        matchGenerationID = try values.decodeIfPresent(String.self, forKey: .matchGenerationID)
+        decisionSource = try values.decodeIfPresent(PhotoDecisionSource.self, forKey: .decisionSource)
+            ?? (decision == .pending ? .automatic : .human)
+        staleDecision = try values.decodeIfPresent(PhotoDecision.self, forKey: .staleDecision)
+        sensitiveApprovedAt = try values.decodeIfPresent(Date.self, forKey: .sensitiveApprovedAt)
+        isInHiddenPeriod = try values.decodeIfPresent(Bool.self, forKey: .isInHiddenPeriod) ?? false
+        manualAssetID = try values.decodeIfPresent(UUID.self, forKey: .manualAssetID)
+    }
+
+    mutating func invalidateForRecognitionGeneration(_ generationID: String) {
+        guard matchGenerationID != generationID else { return }
+        if decisionSource == .human || decisionSource == .manualImport {
+            staleDecision = decision
+        } else {
+            staleDecision = nil
+        }
+        decision = .pending
+        matchGenerationID = generationID
+        sensitiveApprovedAt = nil
+    }
+
+    mutating func reconfirm(
+        _ newDecision: PhotoDecision,
+        generationID: String,
+        source: PhotoDecisionSource = .human,
+        approvedSensitiveAt: Date? = nil
+    ) {
+        decision = newDecision
+        decisionSource = source
+        matchGenerationID = generationID
+        staleDecision = nil
+        sensitiveApprovedAt = requiresSensitiveApproval && newDecision == .selected ? approvedSensitiveAt : nil
     }
 }
 
@@ -989,8 +1619,10 @@ enum FocalCropPolicy {
 }
 
 enum MemoryBookPrintQuality {
-    static let preferredPPI: CGFloat = 300
-    static let minimumPPI: CGFloat = 150
+    /// Frozen Book Check v1 thresholds. Under 100 is blocking, 100..<200 is
+    /// a suggestion, and 200 or greater passes.
+    static let preferredPPI: CGFloat = 200
+    static let minimumPPI: CGFloat = 100
 
     static func drawnSizeInPoints(
         container: CGRect,
@@ -1036,6 +1668,59 @@ enum MemoryBookCropQuality {
     }
 }
 
+enum MemoryBookSubjectSafety {
+    /// Retained fraction = how much of the detected subject stays visible after
+    /// the crop. Export is blocked only when the crop removes MORE THAN HALF the
+    /// subject (< 0.5) — the point where the photo is genuinely unusable. A
+    /// gentle suggestion appears below 0.8. The prior 0.85 blocking / 0.95
+    /// suggestion thresholds were far too strict: trimming 15% of a subject is
+    /// ordinary layout cropping, yet it hard-blocked export and produced dozens
+    /// of false blockers on a normal book. Book Check is a pre-export advisory;
+    /// only a truly ruined crop should stop the user.
+    static let blockingRetention: CGFloat = 0.5
+    static let suggestedRetention: CGFloat = 0.8
+    static let focalEdgeSuggestion: CGFloat = 0.05
+
+    /// Returns the visible source-space rectangle for the shared crop
+    /// transform. The rectangle is conservative for rotated placements; Book
+    /// Check never reports a false pass merely because a frame is rotated.
+    static func visibleSourceRect(container: CGRect, photo: ArchivePhoto, element: MemoryBookElement) -> CGRect {
+        guard element.imageContentMode == .fill,
+              let pixels = photo.pixelSize,
+              pixels.width > 0, pixels.height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
+        let geometry = MemoryBookImageTransformGeometry(container: container, sourceAspect: photo.aspectRatio, element: element)
+        let drawn = geometry.sourceRect(sourcePixelSize: pixels)
+        guard drawn.width > 0, drawn.height > 0 else { return .zero }
+        let raw = CGRect(
+            x: (container.minX - drawn.minX) / drawn.width,
+            y: (container.minY - drawn.minY) / drawn.height,
+            width: container.width / drawn.width,
+            height: container.height / drawn.height
+        )
+        let unit = CGRect(x: 0, y: 0, width: 1, height: 1)
+        return raw.intersection(unit)
+    }
+
+    static func retainedFraction(subjectRegion: CGRect, visibleSourceRect: CGRect) -> CGFloat {
+        let subject = FocalCropPolicy.normalizedSubjectRegion(subjectRegion)
+        guard subject.width > 0, subject.height > 0 else { return 1 }
+        let intersection = subject.intersection(visibleSourceRect)
+        guard !intersection.isNull else { return 0 }
+        return min(1, max(0, intersection.width * intersection.height / (subject.width * subject.height)))
+    }
+
+    static func focalEdgeDistance(subjectRegion: CGRect, visibleSourceRect: CGRect) -> CGFloat {
+        let point = CGPoint(x: subjectRegion.midX, y: subjectRegion.midY)
+        guard visibleSourceRect.width > 0, visibleSourceRect.height > 0 else { return 0 }
+        return [
+            (point.x - visibleSourceRect.minX) / visibleSourceRect.width,
+            (visibleSourceRect.maxX - point.x) / visibleSourceRect.width,
+            (point.y - visibleSourceRect.minY) / visibleSourceRect.height,
+            (visibleSourceRect.maxY - point.y) / visibleSourceRect.height
+        ].min() ?? 0
+    }
+}
+
 /// Local-only model evidence. These values are diagnostic/calibration inputs,
 /// not a claim that the image contains a specific pet.
 struct PetRecognitionEvidence: Codable, Equatable, Sendable {
@@ -1045,6 +1730,9 @@ struct PetRecognitionEvidence: Codable, Equatable, Sendable {
     var agreeingReferenceCount: Int
     var referenceCount: Int
     var wasHighAutoSelected: Bool
+    /// Local calibration evidence only. Vision distances are not probabilities.
+    var minimumReferenceDistance: Double? = nil
+    var medianReferenceDistance: Double? = nil
 }
 
 /// Persisted, aggregate feedback only. Tailor never uploads this summary,
@@ -1306,8 +1994,11 @@ struct Chapter: Identifiable, Codable, Equatable, Sendable {
     var photoIDs: [UUID]
     var isHidden: Bool
     var sortOrder: Int
+    /// Story Plan changes are staged. Existing pages remain readable until
+    /// the user explicitly applies a safe reflow in the page editor.
+    var needsReflow: Bool
 
-    init(id: UUID, title: String, dateLabel: String, note: String = "", photoIDs: [UUID], isHidden: Bool, sortOrder: Int) {
+    init(id: UUID, title: String, dateLabel: String, note: String = "", photoIDs: [UUID], isHidden: Bool, sortOrder: Int, needsReflow: Bool = false) {
         self.id = id
         self.title = title
         self.dateLabel = dateLabel
@@ -1315,9 +2006,10 @@ struct Chapter: Identifiable, Codable, Equatable, Sendable {
         self.photoIDs = photoIDs
         self.isHidden = isHidden
         self.sortOrder = sortOrder
+        self.needsReflow = needsReflow
     }
 
-    private enum CodingKeys: String, CodingKey { case id, title, dateLabel, note, photoIDs, isHidden, sortOrder }
+    private enum CodingKeys: String, CodingKey { case id, title, dateLabel, note, photoIDs, isHidden, sortOrder, needsReflow }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -1328,6 +2020,70 @@ struct Chapter: Identifiable, Codable, Equatable, Sendable {
         photoIDs = try values.decode([UUID].self, forKey: .photoIDs)
         isHidden = try values.decode(Bool.self, forKey: .isHidden)
         sortOrder = try values.decode(Int.self, forKey: .sortOrder)
+        needsReflow = try values.decodeIfPresent(Bool.self, forKey: .needsReflow) ?? false
+    }
+}
+
+enum StoryPlanMutation {
+    enum MoveDirection { case earlier, later }
+
+    @discardableResult
+    static func move(_ chapters: inout [Chapter], chapterID: UUID, direction: MoveDirection) -> Bool {
+        guard let source = chapters.firstIndex(where: { $0.id == chapterID }) else { return false }
+        let destination = direction == .earlier ? source - 1 : source + 1
+        guard chapters.indices.contains(destination) else { return false }
+        chapters.swapAt(source, destination)
+        chapters[source].needsReflow = true
+        chapters[destination].needsReflow = true
+        for index in chapters.indices { chapters[index].sortOrder = index }
+        return true
+    }
+
+    /// Merge is deliberately limited to neighbours. Photo order is stable and
+    /// duplicate identifiers are removed without dropping either chapter's
+    /// unique photographs.
+    @discardableResult
+    static func mergeAdjacent(_ chapters: inout [Chapter], firstID: UUID, secondID: UUID) -> Bool {
+        guard let first = chapters.firstIndex(where: { $0.id == firstID }),
+              let second = chapters.firstIndex(where: { $0.id == secondID }),
+              abs(first - second) == 1 else { return false }
+        let leading = min(first, second), trailing = max(first, second)
+        var merged = chapters[leading]
+        var seen = Set<UUID>()
+        merged.photoIDs = (chapters[leading].photoIDs + chapters[trailing].photoIDs).filter { seen.insert($0).inserted }
+        merged.dateLabel = chapters[leading].dateLabel == chapters[trailing].dateLabel
+            ? chapters[leading].dateLabel
+            : "\(chapters[leading].dateLabel)–\(chapters[trailing].dateLabel)"
+        if merged.note.isEmpty { merged.note = chapters[trailing].note }
+        merged.needsReflow = true
+        chapters[leading] = merged
+        chapters.remove(at: trailing)
+        for index in chapters.indices { chapters[index].sortOrder = index }
+        return true
+    }
+
+    /// The split point is the first photo in the new chapter. Both sides must
+    /// contain a photograph, making the impact shown in Story Plan truthful.
+    @discardableResult
+    static func split(_ chapters: inout [Chapter], chapterID: UUID, atPhotoIndex splitIndex: Int) -> Bool {
+        guard let index = chapters.firstIndex(where: { $0.id == chapterID }),
+              splitIndex > 0, splitIndex < chapters[index].photoIDs.count else { return false }
+        let original = chapters[index]
+        chapters[index].photoIDs = Array(original.photoIDs[..<splitIndex])
+        chapters[index].needsReflow = true
+        let second = Chapter(
+            id: UUID(),
+            title: original.title,
+            dateLabel: original.dateLabel,
+            note: original.note,
+            photoIDs: Array(original.photoIDs[splitIndex...]),
+            isHidden: original.isHidden,
+            sortOrder: index + 1,
+            needsReflow: true
+        )
+        chapters.insert(second, at: index + 1)
+        for index in chapters.indices { chapters[index].sortOrder = index }
+        return true
     }
 }
 
@@ -1372,11 +2128,35 @@ struct ArchiveDocument: Identifiable, Codable, Equatable, Sendable {
     /// A local aggregate used to decide when a human-reviewed calibration set
     /// is large enough. Thresholds are never automatically changed from it.
     var recognitionFeedback: PetRecognitionFeedbackSummary
+    var storyPlanDraft: StoryPlanDraft?
+    var archiveCheckpoint: ArchiveCheckpoint?
+    var bookCheckResults: [BookCheckResult]
+    var activeRecognitionGeneration: RecognitionGeneration?
+    var recognitionMatches: [RecognitionMatchRecord]
+    var manualAssets: [ManualAssetReference]
+    var returnContextStack: ReturnContextStack
     var updatedAt: Date
 
     var id: UUID { profile.id }
 
-    init(profile: PetProfile, photos: [ArchivePhoto] = [], chapters: [Chapter] = [], scanCheckpoint: ScanCheckpoint? = nil, scanAuditMetrics: ScanAuditMetrics = .init(), memoryBook: MemoryBookDocument? = nil, exportRecords: [MemoryBookExportRecord] = [], recognitionFeedback: PetRecognitionFeedbackSummary? = nil, updatedAt: Date = .now) {
+    init(
+        profile: PetProfile,
+        photos: [ArchivePhoto] = [],
+        chapters: [Chapter] = [],
+        scanCheckpoint: ScanCheckpoint? = nil,
+        scanAuditMetrics: ScanAuditMetrics = .init(),
+        memoryBook: MemoryBookDocument? = nil,
+        exportRecords: [MemoryBookExportRecord] = [],
+        recognitionFeedback: PetRecognitionFeedbackSummary? = nil,
+        storyPlanDraft: StoryPlanDraft? = nil,
+        archiveCheckpoint: ArchiveCheckpoint? = nil,
+        bookCheckResults: [BookCheckResult] = [],
+        activeRecognitionGeneration: RecognitionGeneration? = nil,
+        recognitionMatches: [RecognitionMatchRecord] = [],
+        manualAssets: [ManualAssetReference] = [],
+        returnContextStack: ReturnContextStack = .init(),
+        updatedAt: Date = .now
+    ) {
         self.profile = profile
         self.photos = photos
         self.chapters = chapters
@@ -1385,10 +2165,22 @@ struct ArchiveDocument: Identifiable, Codable, Equatable, Sendable {
         self.memoryBook = memoryBook
         self.exportRecords = exportRecords
         self.recognitionFeedback = recognitionFeedback ?? .make(from: photos)
+        self.storyPlanDraft = storyPlanDraft
+        self.archiveCheckpoint = archiveCheckpoint
+        self.bookCheckResults = bookCheckResults
+        self.activeRecognitionGeneration = activeRecognitionGeneration
+        self.recognitionMatches = recognitionMatches
+        self.manualAssets = manualAssets
+        self.returnContextStack = returnContextStack
         self.updatedAt = updatedAt
+        self.archiveCheckpoint = ArchiveCheckpoint.resolved(archiveCheckpoint, for: self)
     }
 
-    private enum CodingKeys: String, CodingKey { case profile, photos, chapters, scanCheckpoint, scanAuditMetrics, memoryBook, exportRecords, recognitionFeedback, updatedAt }
+    private enum CodingKeys: String, CodingKey {
+        case profile, photos, chapters, scanCheckpoint, scanAuditMetrics, memoryBook, exportRecords, recognitionFeedback
+        case storyPlanDraft, archiveCheckpoint, bookCheckResults, activeRecognitionGeneration, recognitionMatches, manualAssets, returnContextStack
+        case updatedAt
+    }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         profile = try values.decode(PetProfile.self, forKey: .profile)
@@ -1399,7 +2191,226 @@ struct ArchiveDocument: Identifiable, Codable, Equatable, Sendable {
         memoryBook = try values.decodeIfPresent(MemoryBookDocument.self, forKey: .memoryBook)
         exportRecords = try values.decodeIfPresent([MemoryBookExportRecord].self, forKey: .exportRecords) ?? []
         recognitionFeedback = try values.decodeIfPresent(PetRecognitionFeedbackSummary.self, forKey: .recognitionFeedback) ?? .make(from: photos)
+        storyPlanDraft = try values.decodeIfPresent(StoryPlanDraft.self, forKey: .storyPlanDraft)
+        if storyPlanDraft == nil, memoryBook == nil, !chapters.isEmpty {
+            storyPlanDraft = StoryPlanDraft.migrating(
+                profile: profile,
+                photos: photos,
+                chapters: chapters,
+                sourceMatchGenerationID: nil
+            )
+        }
+        let persistedArchiveCheckpoint = try values.decodeIfPresent(ArchiveCheckpoint.self, forKey: .archiveCheckpoint)
+        archiveCheckpoint = persistedArchiveCheckpoint
+        bookCheckResults = try values.decodeIfPresent([BookCheckResult].self, forKey: .bookCheckResults) ?? []
+        activeRecognitionGeneration = try values.decodeIfPresent(RecognitionGeneration.self, forKey: .activeRecognitionGeneration)
+        recognitionMatches = try values.decodeIfPresent([RecognitionMatchRecord].self, forKey: .recognitionMatches) ?? []
+        manualAssets = try values.decodeIfPresent([ManualAssetReference].self, forKey: .manualAssets) ?? []
+        returnContextStack = try values.decodeIfPresent(ReturnContextStack.self, forKey: .returnContextStack) ?? .init()
         updatedAt = try values.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
+        archiveCheckpoint = ArchiveCheckpoint.resolved(persistedArchiveCheckpoint, for: self)
+    }
+}
+
+extension ArchiveCheckpointStage {
+    /// A restored checkpoint is usable only when every artifact required to
+    /// resume that screen still exists. This keeps a stale late-stage marker
+    /// from routing into a screen whose source data was deleted or migrated.
+    func isValid(for document: ArchiveDocument) -> Bool {
+        switch self {
+        case .profile:
+            return true
+        case .references:
+            return document.hasCompleteProfile
+        case .scan:
+            return document.hasCompleteProfile
+                && document.profile.referenceAssetIdentifiers.count >= 3
+                && !document.hasManualImportCandidates
+        case .review:
+            return document.hasCompleteProfile && document.hasReviewOutput
+        case .smartDraft:
+            return document.eligiblePhotoCount >= 3
+        case .storyPlan:
+            return document.storyPlanDraft != nil
+        case .stylePending:
+            return document.storyPlanDraft?.state == .confirmed
+        case .documentReady:
+            return document.memoryBook != nil
+        }
+    }
+}
+
+extension ArchiveCheckpoint {
+    /// Preserve a valid explicit checkpoint (including an intentionally paused
+    /// earlier stage). If its dependencies are gone, route to the first screen
+    /// that can repair the aggregate instead of discarding later snapshots.
+    static func resolved(_ persisted: ArchiveCheckpoint?, for document: ArchiveDocument) -> ArchiveCheckpoint {
+        if let persisted, persisted.stage.isValid(for: document) {
+            return persisted
+        }
+        return fallback(for: document, updatedAt: persisted?.updatedAt ?? document.updatedAt)
+    }
+
+    static func fallback(for document: ArchiveDocument, updatedAt: Date? = nil) -> ArchiveCheckpoint {
+        let stage: ArchiveCheckpointStage
+        if document.memoryBook != nil {
+            stage = .documentReady
+        } else if !document.hasCompleteProfile {
+            stage = .profile
+        } else if !document.hasReferenceOrManualInput {
+            stage = .references
+        } else if !document.hasReviewOutput {
+            stage = document.hasManualImportCandidates ? .references : .scan
+        } else if document.eligiblePhotoCount < 3 {
+            stage = .review
+        } else if let draft = document.storyPlanDraft {
+            stage = draft.state == .confirmed ? .stylePending : .storyPlan
+        } else {
+            stage = .smartDraft
+        }
+        return ArchiveCheckpoint(stage: stage, updatedAt: updatedAt ?? document.updatedAt)
+    }
+}
+
+private extension ArchiveDocument {
+    var hasCompleteProfile: Bool {
+        !profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && profile.departureYear >= 1900
+            && profile.arrivalYear.map { $0 <= profile.departureYear } != false
+    }
+
+    var hasManualImportCandidates: Bool {
+        !manualAssets.isEmpty || photos.contains { $0.decisionSource == .manualImport }
+    }
+
+    var hasReferenceOrManualInput: Bool {
+        profile.referenceAssetIdentifiers.count >= 3 || hasManualImportCandidates
+    }
+
+    var hasReviewOutput: Bool {
+        if !photos.isEmpty { return true }
+        guard let scanCheckpoint else { return false }
+        return scanCheckpoint.totalAssets > 0 && scanCheckpoint.nextAssetIndex >= scanCheckpoint.totalAssets
+    }
+
+    var eligiblePhotoCount: Int { photos.lazy.filter(\.isEligibleForArchive).count }
+}
+
+extension ArchiveDocument {
+    func cachedBookCheckResult(for document: MemoryBookDocument, rulesVersion: Int = BookCheckCacheKey.currentRulesVersion) -> BookCheckResult? {
+        let key = BookCheckCacheKey(documentRevisionID: document.documentRevisionID, paperSize: document.pageSize, rulesVersion: rulesVersion)
+        return bookCheckResults.first { $0.cacheKey == key }
+    }
+
+    mutating func storeBookCheckResult(_ result: BookCheckResult) {
+        bookCheckResults.removeAll { $0.cacheKey == result.cacheKey }
+        bookCheckResults.append(result)
+        updatedAt = .now
+    }
+
+    mutating func activateRecognitionGeneration(_ generation: RecognitionGeneration) {
+        guard activeRecognitionGeneration?.matchGenerationID != generation.matchGenerationID else { return }
+        activeRecognitionGeneration = generation
+        for index in photos.indices where photos[index].decisionSource != .manualImport {
+            photos[index].invalidateForRecognitionGeneration(generation.matchGenerationID)
+        }
+        updatedAt = .now
+    }
+}
+
+struct RecognitionGenerationTransition: Equatable, Sendable {
+    var generation: RecognitionGeneration
+    var requiresFullRematch: Bool
+}
+
+/// Coordinates reusable asset embeddings with pet-specific match generations.
+/// A same-generation refresh is additive; a species/reference/matcher change
+/// invalidates old automatic results and exposes old human choices as stale.
+enum RecognitionGenerationCoordinator {
+    static func transition(
+        for profile: PetProfile,
+        current: RecognitionGeneration?,
+        matcherVersion: String = PetRecognitionVersion.matcherVersion,
+        at date: Date = .now
+    ) -> RecognitionGenerationTransition {
+        let fingerprint = RecognitionGeneration.referenceSetFingerprint(profile.referenceAssetIdentifiers)
+        let generation = RecognitionGeneration(
+            petProfileID: profile.id,
+            species: profile.species,
+            referenceSetFingerprint: fingerprint,
+            matcherVersion: matcherVersion,
+            createdAt: date
+        )
+        return .init(generation: generation, requiresFullRematch: current?.matchGenerationID != generation.matchGenerationID)
+    }
+
+    static func preparing(_ source: ArchiveDocument, transition: RecognitionGenerationTransition) -> ArchiveDocument {
+        var result = source
+        if transition.requiresFullRematch {
+            result.activateRecognitionGeneration(transition.generation)
+            result.recognitionMatches.removeAll()
+            result.scanCheckpoint = nil
+        } else if result.activeRecognitionGeneration == nil {
+            result.activeRecognitionGeneration = transition.generation
+        }
+        return result
+    }
+
+    static func merging(
+        scanned candidates: [ArchivePhoto],
+        into source: ArchiveDocument,
+        generation: RecognitionGeneration,
+        at date: Date = .now
+    ) -> ArchiveDocument {
+        let previousByAsset = Dictionary(uniqueKeysWithValues: source.photos.map { ($0.assetLocalIdentifier, $0) })
+        var generated = candidates.map { candidate -> ArchivePhoto in
+            var photo = candidate
+            photo.matchGenerationID = generation.matchGenerationID
+            photo.decisionSource = .automatic
+            if let previous = previousByAsset[photo.assetLocalIdentifier] {
+                photo.id = previous.id
+                if previous.matchGenerationID != generation.matchGenerationID,
+                   previous.decisionSource == .human,
+                   previous.decision != .pending {
+                    photo.staleDecision = previous.decision
+                    photo.decision = .pending
+                } else if previous.matchGenerationID == generation.matchGenerationID,
+                          previous.decisionSource == .human {
+                    photo.decision = previous.decision
+                    photo.decisionSource = .human
+                    photo.sensitivityState = previous.sensitivityState
+                    photo.sensitiveApprovedAt = previous.sensitiveApprovedAt
+                    photo.excludedReason = previous.excludedReason
+                    photo.staleDecision = previous.staleDecision
+                }
+            }
+            return photo
+        }
+        // Keep manual imports and stale human decisions whose assets no longer
+        // pass the new automatic gate. They remain visible for explicit review,
+        // but are ineligible until reconfirmed in the new generation.
+        let scannedIDs = Set(generated.map(\.assetLocalIdentifier))
+        generated.append(contentsOf: source.photos.filter {
+            $0.decisionSource == .manualImport
+                || (!scannedIDs.contains($0.assetLocalIdentifier) && $0.staleDecision != nil)
+        })
+
+        var result = source
+        result.activeRecognitionGeneration = generation
+        result.photos = generated
+        result.recognitionMatches = generated.compactMap { photo in
+            guard photo.decisionSource != .manualImport else { return nil }
+            return RecognitionMatchRecord(
+                matchGenerationID: generation.matchGenerationID,
+                assetID: photo.assetLocalIdentifier,
+                confidence: photo.confidence,
+                automaticDecision: photo.recognitionEvidence?.wasHighAutoSelected == true ? .selected : .pending,
+                createdAt: date
+            )
+        }
+        result.recognitionFeedback = .make(from: generated)
+        result.updatedAt = date
+        return result
     }
 }
 
@@ -1516,30 +2527,78 @@ enum MemoryBookImageContentMode: String, Codable, Sendable, CaseIterable {
 /// A deliberately curated set rather than arbitrary installed fonts. The same
 /// PostScript name is available to UIKit and Quartz, keeping preview/PDF text
 /// identical and avoiding an unprintable "art font" choice.
-enum MemoryBookTextFont: String, Codable, Sendable, CaseIterable {
-    case editorial, quietSans, handwritten, cinema
+enum MemoryBookTextFont: String, Sendable, CaseIterable, Codable {
+    case system, rounded, systemSerif, iowanOldStyle, baskerville, avenirNext, americanTypewriter, noteworthy
+
+    // Source compatibility for code and migrated documents created before v2.
+    static let editorial: Self = .systemSerif
+    static let quietSans: Self = .avenirNext
+    static let handwritten: Self = .noteworthy
+    static let cinema: Self = .avenirNext
 
     var displayName: String {
         switch self {
-        case .editorial: "Editorial"
-        case .quietSans: "Quiet sans"
-        case .handwritten: "Handwritten"
-        case .cinema: "Cinema"
+        case .system: "System"
+        case .rounded: "Rounded"
+        case .systemSerif: "System Serif"
+        case .iowanOldStyle: "Iowan Old Style"
+        case .baskerville: "Baskerville"
+        case .avenirNext: "Avenir Next"
+        case .americanTypewriter: "American Typewriter"
+        case .noteworthy: "Noteworthy"
         }
     }
 
     func font(size: CGFloat, fallback: MemoryBookFontToken) -> UIFont {
+        let descriptorCandidate: UIFont?
         let candidates: [String]
         switch self {
-        case .editorial:
-            candidates = fallback == .display
-                ? [MemoryBookTypography.displayPostScriptName, MemoryBookTypography.displayFallbackPostScriptName, "Georgia"]
-                : [MemoryBookTypography.bodyPostScriptName, MemoryBookTypography.bodyFallbackPostScriptName, "Avenir-Book"]
-        case .quietSans: candidates = ["Avenir-Book", "HelveticaNeue", "Helvetica"]
-        case .handwritten: candidates = ["Noteworthy-Light", "BradleyHandITCTT-Bold", "ChalkboardSE-Regular"]
-        case .cinema: candidates = ["AvenirNext-DemiBold", "HelveticaNeue-Medium", "Helvetica-Bold"]
+        case .system:
+            descriptorCandidate = UIFont.systemFont(ofSize: size)
+            candidates = ["HelveticaNeue", "Helvetica"]
+        case .rounded:
+            descriptorCandidate = UIFont.systemFont(ofSize: size).fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) }
+            candidates = ["ArialRoundedMTBold", "AvenirNext-Medium"]
+        case .systemSerif:
+            // Do not persist the private `.NewYork-Regular` descriptor name:
+            // CTFontCreateWithName substitutes Times for it on current iOS.
+            descriptorCandidate = nil
+            candidates = ["NewYork-Regular", "IowanOldStyle-Roman", "Georgia", "TimesNewRomanPSMT"]
+        case .iowanOldStyle: descriptorCandidate = nil; candidates = ["IowanOldStyle-Roman", "Iowan Old Style"]
+        case .baskerville: descriptorCandidate = nil; candidates = ["Baskerville", "Baskerville-Regular"]
+        case .avenirNext: descriptorCandidate = nil; candidates = ["AvenirNext-Regular", "AvenirNext-Medium", "Avenir-Book"]
+        case .americanTypewriter: descriptorCandidate = nil; candidates = ["AmericanTypewriter", "AmericanTypewriter-Light"]
+        case .noteworthy: descriptorCandidate = nil; candidates = ["Noteworthy-Light", "Noteworthy-Bold"]
         }
-        return candidates.lazy.compactMap { UIFont(name: $0, size: size) }.first ?? UIFont.systemFont(ofSize: size)
+        let explicitCandidates = candidates.compactMap { UIFont(name: $0, size: size) }
+        return ([descriptorCandidate].compactMap { $0 } + explicitCandidates)
+            .first(where: Self.roundTripsThroughCoreText)
+            ?? UIFont(name: "HelveticaNeue", size: size)!
+    }
+
+    private static func roundTripsThroughCoreText(_ font: UIFont) -> Bool {
+        guard UIFont(name: font.fontName, size: font.pointSize)?.fontName == font.fontName else { return false }
+        let coreTextFont = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
+        return CTFontCopyPostScriptName(coreTextFont) as String == font.fontName
+    }
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        switch value {
+        case "editorial": self = .systemSerif
+        case "quietSans", "cinema": self = .avenirNext
+        case "handwritten": self = .noteworthy
+        default:
+            guard let font = Self(rawValue: value) else {
+                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Unknown font token \(value)"))
+            }
+            self = font
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -1888,13 +2947,14 @@ struct MemoryBookPage: Identifiable, Codable, Equatable, Sendable {
     /// Nil preserves the selected style's authored paper color.
     var backgroundColor: MemoryBookRGB?
     var isLocked: Bool
+    var needsReflow: Bool
 
-    init(id: UUID = UUID(), kind: MemoryBookPageKind, title: String, subtitle: String = "", chapterID: UUID? = nil, photoIDs: [UUID] = [], layout: MemoryBookLayout = .note, pageNumber: Int, elements: [MemoryBookElement] = [], styleOverride: AlbumStyle? = nil, backgroundColor: MemoryBookRGB? = nil, isLocked: Bool = false) {
+    init(id: UUID = UUID(), kind: MemoryBookPageKind, title: String, subtitle: String = "", chapterID: UUID? = nil, photoIDs: [UUID] = [], layout: MemoryBookLayout = .note, pageNumber: Int, elements: [MemoryBookElement] = [], styleOverride: AlbumStyle? = nil, backgroundColor: MemoryBookRGB? = nil, isLocked: Bool = false, needsReflow: Bool = false) {
         self.id = id; self.kind = kind; self.title = title; self.subtitle = subtitle
-        self.chapterID = chapterID; self.photoIDs = photoIDs; self.layout = layout; self.pageNumber = pageNumber; self.elements = elements; self.styleOverride = styleOverride; self.backgroundColor = backgroundColor; self.isLocked = isLocked
+        self.chapterID = chapterID; self.photoIDs = photoIDs; self.layout = layout; self.pageNumber = pageNumber; self.elements = elements; self.styleOverride = styleOverride; self.backgroundColor = backgroundColor; self.isLocked = isLocked; self.needsReflow = needsReflow
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, title, subtitle, chapterID, photoIDs, layout, pageNumber, elements, styleOverride, backgroundColor, isLocked }
+    private enum CodingKeys: String, CodingKey { case id, kind, title, subtitle, chapterID, photoIDs, layout, pageNumber, elements, styleOverride, backgroundColor, isLocked, needsReflow }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(UUID.self, forKey: .id); kind = try values.decode(MemoryBookPageKind.self, forKey: .kind)
@@ -1905,11 +2965,15 @@ struct MemoryBookPage: Identifiable, Codable, Equatable, Sendable {
         styleOverride = try values.decodeIfPresent(AlbumStyle.self, forKey: .styleOverride)
         backgroundColor = try values.decodeIfPresent(MemoryBookRGB.self, forKey: .backgroundColor)
         isLocked = try values.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        needsReflow = try values.decodeIfPresent(Bool.self, forKey: .needsReflow) ?? false
     }
 }
 
 struct MemoryBookDocument: Identifiable, Codable, Equatable, Sendable {
     var id: UUID { profile.id }
+    /// Changes whenever persisted page/style/paper semantics change. Book Check
+    /// and purchase gates must key off this value rather than wall-clock time.
+    var documentRevisionID: UUID
     var profile: PetProfile
     var photos: [ArchivePhoto]
     var chapters: [Chapter]
@@ -1918,16 +2982,93 @@ struct MemoryBookDocument: Identifiable, Codable, Equatable, Sendable {
     var pageSize: PDFPageSize
     var schemaVersion: Int
     var updatedAt: Date
+    /// Stable issue keys intentionally ignored by the user. Optional keeps
+    /// v1/v2 drafts decodable without a destructive migration.
+    var ignoredBookCheckSuggestionKeys: Set<String>?
 
     var eligiblePhotos: [ArchivePhoto] { photos.filter(\.isEligibleForArchive) }
 
-    init(profile: PetProfile, photos: [ArchivePhoto], chapters: [Chapter], pages: [MemoryBookPage], style: AlbumStyle, pageSize: PDFPageSize, schemaVersion: Int = 2, updatedAt: Date = .now) {
+    init(profile: PetProfile, photos: [ArchivePhoto], chapters: [Chapter], pages: [MemoryBookPage], style: AlbumStyle, pageSize: PDFPageSize, schemaVersion: Int = 2, updatedAt: Date = .now, ignoredBookCheckSuggestionKeys: Set<String>? = nil, documentRevisionID: UUID = UUID()) {
+        self.documentRevisionID = documentRevisionID
         self.profile = profile; self.photos = photos; self.chapters = chapters; self.pages = pages
-        self.style = style; self.pageSize = pageSize; self.schemaVersion = schemaVersion; self.updatedAt = updatedAt
+        self.style = style; self.pageSize = pageSize; self.schemaVersion = schemaVersion; self.updatedAt = updatedAt; self.ignoredBookCheckSuggestionKeys = ignoredBookCheckSuggestionKeys
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case documentRevisionID, profile, photos, chapters, pages, style, pageSize, schemaVersion, updatedAt, ignoredBookCheckSuggestionKeys
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        profile = try values.decode(PetProfile.self, forKey: .profile)
+        // Legacy v2 documents did not persist a revision identifier. Reusing
+        // profile.id gives them a deterministic first migrated revision; the
+        // first authored mutation will advance it through `beginNewRevision`.
+        documentRevisionID = try values.decodeIfPresent(UUID.self, forKey: .documentRevisionID) ?? profile.id
+        photos = try values.decodeIfPresent([ArchivePhoto].self, forKey: .photos) ?? []
+        chapters = try values.decodeIfPresent([Chapter].self, forKey: .chapters) ?? []
+        pages = try values.decodeIfPresent([MemoryBookPage].self, forKey: .pages) ?? []
+        style = try values.decodeIfPresent(AlbumStyle.self, forKey: .style) ?? profile.albumStyle
+        pageSize = try values.decodeIfPresent(PDFPageSize.self, forKey: .pageSize) ?? .letter
+        schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 2
+        updatedAt = try values.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
+        ignoredBookCheckSuggestionKeys = try values.decodeIfPresent(Set<String>.self, forKey: .ignoredBookCheckSuggestionKeys)
+    }
+
+    mutating func beginNewRevision(at date: Date = .now) {
+        documentRevisionID = UUID()
+        updatedAt = date
     }
 }
 
 enum MemoryBookIssueSeverity: String, Codable, Sendable { case blocking, suggestion }
+
+enum BookCheckResultStatus: String, Codable, Sendable { case passed, warnings, blocked }
+
+struct BookCheckCacheKey: Codable, Hashable, Sendable {
+    static let currentRulesVersion = 1
+
+    var documentRevisionID: UUID
+    var paperSize: PDFPageSize
+    var rulesVersion: Int
+
+    init(documentRevisionID: UUID, paperSize: PDFPageSize, rulesVersion: Int = Self.currentRulesVersion) {
+        self.documentRevisionID = documentRevisionID
+        self.paperSize = paperSize
+        self.rulesVersion = rulesVersion
+    }
+}
+
+struct BookCheckFindingRecord: Codable, Equatable, Sendable {
+    var ruleID: String
+    var severity: MemoryBookIssueSeverity
+    var pageID: UUID?
+    var elementID: UUID?
+    var field: MemoryBookTextField?
+    var message: String
+}
+
+struct BookCheckResult: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var cacheKey: BookCheckCacheKey
+    var status: BookCheckResultStatus
+    var findings: [BookCheckFindingRecord]
+    var checkedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        cacheKey: BookCheckCacheKey,
+        status: BookCheckResultStatus,
+        findings: [BookCheckFindingRecord],
+        checkedAt: Date = .now
+    ) {
+        self.id = id
+        self.cacheKey = cacheKey
+        self.status = status
+        self.findings = findings
+        self.checkedAt = checkedAt
+    }
+}
 
 struct MemoryBookElementFrameRepair: Equatable, Sendable {
     let elementID: UUID
@@ -1985,6 +3126,106 @@ struct MemoryBookIssue: Identifiable, Equatable, Sendable {
         self.message = message
         self.repair = repair
     }
+
+    var persistenceKey: String {
+        [stableRuleID, pageID?.uuidString ?? "book", elementID?.uuidString ?? "page", field?.rawValue ?? ""].joined(separator: "|")
+    }
+
+    /// Stable rule identity used by ReturnContext fallback and persisted Book
+    /// Check records. User-facing copy may evolve without breaking locators.
+    var stableRuleID: String {
+        let value = message.lowercased()
+        if value.contains("no longer available") { return "photo-unavailable" }
+        if value.contains("ppi") { return "photo-ppi" }
+        if value.contains("subject") { return "subject-safe-area" }
+        if value.contains("focal") { return "focal-edge" }
+        if value.contains("font") { return "font-unavailable" }
+        if value.contains("longer than") || value.contains("overflows") { return "text-overflow" }
+        if value.contains("appears more than once") || value.contains("near-duplicate") { return "near-duplicate" }
+        if value.contains("same page recipe") { return "repeated-recipe" }
+        if value.contains("at least one photo") { return "empty-book" }
+        if value.contains("empty") { return "empty-page" }
+        if value.contains("contrast") { return "text-contrast" }
+        if value.contains("rotated") { return "rotation" }
+        if value.contains("aligned") { return "alignment" }
+        return "layout-review"
+    }
+}
+
+struct BookCheckNavigationTarget: Equatable, Sendable {
+    let issue: MemoryBookIssue
+    let issueIndex: Int
+}
+
+enum BookCheckWorkflow {
+    static func evaluate(
+        _ document: MemoryBookDocument,
+        rulesVersion: Int = BookCheckCacheKey.currentRulesVersion,
+        at date: Date = .now,
+        assetIsAvailable: (ArchivePhoto) -> Bool = { _ in true }
+    ) -> BookCheckResult {
+        let issues = document.checkBook(assetIsAvailable: assetIsAvailable)
+        let findings = issues.map {
+            BookCheckFindingRecord(
+                ruleID: $0.stableRuleID,
+                severity: $0.severity,
+                pageID: $0.pageID,
+                elementID: $0.elementID,
+                field: $0.field,
+                message: $0.message
+            )
+        }
+        let status: BookCheckResultStatus = findings.contains(where: { $0.severity == .blocking })
+            ? .blocked
+            : (findings.isEmpty ? .passed : .warnings)
+        return BookCheckResult(
+            cacheKey: .init(documentRevisionID: document.documentRevisionID, paperSize: document.pageSize, rulesVersion: rulesVersion),
+            status: status,
+            findings: findings,
+            checkedAt: date
+        )
+    }
+
+    static func resolvedIssueIndex(for locator: BookCheckIssueLocator?, in issues: [MemoryBookIssue]) -> Int? {
+        guard !issues.isEmpty else { return nil }
+        guard let locator else { return 0 }
+        if let exact = issues.firstIndex(where: {
+            $0.stableRuleID == locator.ruleID && $0.pageID == locator.pageID && $0.elementID == locator.elementID
+        }) { return exact }
+        return min(max(0, locator.formerIssueIndex), issues.count - 1)
+    }
+
+    static func resolvedPageID(for frame: ReturnContextFrame, in document: MemoryBookDocument) -> UUID? {
+        if let logical = frame.logicalPageID, document.pages.contains(where: { $0.id == logical }) { return logical }
+        guard !document.pages.isEmpty else { return nil }
+        return document.pages[min(max(0, frame.formerPageIndex ?? 0), document.pages.count - 1)].id
+    }
+}
+
+extension MemoryBookDocument {
+    func isBookCheckSuggestionIgnored(_ issue: MemoryBookIssue) -> Bool {
+        issue.severity == .suggestion && (ignoredBookCheckSuggestionKeys ?? []).contains(issue.persistenceKey)
+    }
+
+    mutating func setBookCheckSuggestion(_ issue: MemoryBookIssue, ignored: Bool) {
+        guard issue.severity == .suggestion else { return }
+        var keys = ignoredBookCheckSuggestionKeys ?? []
+        if ignored { keys.insert(issue.persistenceKey) } else { keys.remove(issue.persistenceKey) }
+        ignoredBookCheckSuggestionKeys = keys
+        updatedAt = .now
+    }
+
+    @discardableResult
+    mutating func markPagesNeedsReflow(chapterIDs: Set<UUID>) -> Int {
+        var changed = 0
+        for index in pages.indices where !pages[index].isLocked {
+            guard let chapterID = pages[index].chapterID, chapterIDs.contains(chapterID), !pages[index].needsReflow else { continue }
+            pages[index].needsReflow = true
+            changed += 1
+        }
+        if changed > 0 { updatedAt = .now }
+        return changed
+    }
 }
 
 struct MemoryBookLayoutChangeSummary: Equatable, Sendable {
@@ -2033,7 +3274,10 @@ extension MemoryBookDocument {
         let manifest = document.renderManifest(watermarked: watermarked)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let payload = (try? encoder.encode(manifest)) ?? Data()
+        // Fingerprint the persisted revision itself, not one consumer's
+        // derived manifest. Reader and PDF can therefore prove that they
+        // rendered the same serialized MemoryBookDocument revision.
+        let payload = (try? encoder.encode(document)) ?? Data()
         let fingerprint = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
         return MemoryBookExportSnapshot(document: document, manifest: manifest, fingerprint: fingerprint)
     }
@@ -2138,7 +3382,7 @@ extension MemoryBookDocument {
         return MemoryBookPageRenderPlan.makeTextLayout(
             element: probe,
             pageKind: migratedPage.kind,
-            pageSize: plan.pageSize,
+            canonicalPageSize: MemoryBookPageRenderPlan.points(for: pageSize),
             paperRect: plan.paperRect,
             safeRect: plan.safeRect,
             style: plan.style,
@@ -2173,7 +3417,7 @@ extension MemoryBookDocument {
         let layout = MemoryBookPageRenderPlan.makeTextLayout(
             element: probe,
             pageKind: migratedPage.kind,
-            pageSize: plan.pageSize,
+            canonicalPageSize: MemoryBookPageRenderPlan.points(for: pageSize),
             paperRect: plan.paperRect,
             safeRect: plan.safeRect,
             style: plan.style,
@@ -2487,6 +3731,7 @@ extension MemoryBookDocument {
         var issues: [MemoryBookIssue] = []
         let validIDs = Set(document.eligiblePhotos.map(\.id))
         var placements = [UUID: [UUID]]()
+        var nearDuplicatePlacements = [String: [(pageID: UUID, userForced: Bool)]]()
         for page in document.pages {
             let plan = MemoryBookPageRenderPlan(
                 page: page,
@@ -2517,6 +3762,32 @@ extension MemoryBookDocument {
                         message: message
                     ))
                 }
+                if let assetID = element.assetID,
+                   let photo = document.photos.first(where: { $0.id == assetID }),
+                   let subjectRegion = photo.subjectRegion {
+                    let container = plan.rect(for: element.normalizedFrame)
+                    let visible = MemoryBookSubjectSafety.visibleSourceRect(container: container, photo: photo, element: element)
+                    let retained = MemoryBookSubjectSafety.retainedFraction(subjectRegion: subjectRegion, visibleSourceRect: visible)
+                    if retained < MemoryBookSubjectSafety.suggestedRetention {
+                        let percent = Int((retained * 100).rounded())
+                        issues.append(MemoryBookIssue(
+                            // Crop safety is advisory, not a hard gate: a tight
+                            // subject crop is a judgement call the user can accept.
+                            // Always a suggestion so it never blocks export.
+                            severity: .suggestion,
+                            pageID: page.id,
+                            elementID: element.id,
+                            message: "The subject safe area keeps about \(percent)% of the detected subject. Review the crop before export."
+                        ))
+                    } else if MemoryBookSubjectSafety.focalEdgeDistance(subjectRegion: subjectRegion, visibleSourceRect: visible) < MemoryBookSubjectSafety.focalEdgeSuggestion {
+                        issues.append(MemoryBookIssue(
+                            severity: .suggestion,
+                            pageID: page.id,
+                            elementID: element.id,
+                            message: "The focal point is within 5% of the visible crop edge. Review the framing before print."
+                        ))
+                    }
+                }
                 if element.origin == .automatic,
                    element.imageContentMode == .fill,
                    element.cropScale == 1,
@@ -2533,19 +3804,30 @@ extension MemoryBookDocument {
                     if visibleFraction < MemoryBookCropQuality.minimumUnreviewedVisibleFraction {
                         let croppedPercent = Int(((1 - visibleFraction) * 100).rounded())
                         issues.append(MemoryBookIssue(
-                            severity: .blocking,
+                            // Downgraded from blocking: an aggressive automatic
+                            // crop is worth flagging, but the user may keep it, so
+                            // it must not stop export.
+                            severity: .suggestion,
                             pageID: page.id,
                             elementID: element.id,
                             message: "This automatic frame crops about \(croppedPercent)% of the photo and no subject focus is available. Open Crop and confirm the framing before export."
                         ))
                     }
                 }
-                if let assetID = element.assetID { placements[assetID, default: []].append(page.id) }
+                if let assetID = element.assetID {
+                    placements[assetID, default: []].append(page.id)
+                    if let group = document.photos.first(where: { $0.id == assetID })?.visualDuplicateGroupID {
+                        nearDuplicatePlacements[group, default: []].append((page.id, element.origin == .user))
+                    }
+                }
             }
             if page.kind == .photoSelection && !page.isLocked && !page.elements.contains(where: { $0.kind == .image && !$0.isHidden }) {
                 issues.append(MemoryBookIssue(severity: .suggestion, pageID: page.id, message: "This photo page is empty. Add a photo, keep it as a note page, or remove it."))
             }
             for element in page.elements where element.kind == .text && !element.isHidden {
+                if let layout = plan.textLayout(for: element), !layout.spec.hasSharedFontResolution {
+                    issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, field: element.textField, message: "This font cannot be rendered consistently for print. Choose another font before export."))
+                }
                 if (element.text ?? "").count > document.textCharacterLimit(for: element, on: page) {
                     issues.append(MemoryBookIssue(severity: .blocking, pageID: page.id, elementID: element.id, field: element.textField, message: "Text is longer than this page allows. Shorten it before export."))
                 }
@@ -2578,6 +3860,32 @@ extension MemoryBookDocument {
                 pageID: uniquePageIDs.first,
                 message: "This photo appears more than once (on \(uniquePageIDs.count) pages). Keep the repetition only if it is intentional."
             ))
+        }
+        for (_, placements) in nearDuplicatePlacements.sorted(by: { $0.key < $1.key }) {
+            let pages = Array(Set(placements.map(\.pageID)))
+            guard pages.count > 1, !placements.contains(where: { $0.userForced }) else { continue }
+            issues.append(MemoryBookIssue(
+                severity: .suggestion,
+                pageID: pages.sorted(by: { $0.uuidString < $1.uuidString }).first,
+                message: "Near-duplicate photos appear on \(pages.count) pages. Keep both only when the repetition is intentional."
+            ))
+        }
+        var repeatedRecipeCount = 1
+        for index in document.pages.indices.dropFirst() {
+            let previous = document.pages[index - 1]
+            let current = document.pages[index]
+            if previous.kind == current.kind && previous.layout.canonical == current.layout.canonical {
+                repeatedRecipeCount += 1
+                if repeatedRecipeCount == 3 {
+                    issues.append(MemoryBookIssue(
+                        severity: .suggestion,
+                        pageID: current.id,
+                        message: "The same page recipe appears more than twice in a row. Vary the rhythm or keep it intentionally."
+                    ))
+                }
+            } else {
+                repeatedRecipeCount = 1
+            }
         }
         if !document.pages.contains(where: { $0.elements.contains(where: { $0.kind == .image && !$0.isHidden }) }) {
             issues.append(MemoryBookIssue(severity: .blocking, pageID: nil, message: "Add at least one photo before exporting."))
@@ -2896,7 +4204,475 @@ enum MemoryBookCropExitState: Equatable, Sendable {
     }
 }
 
+enum MemoryBookPhotoRole: String, Codable, CaseIterable, Sendable {
+    case hero, supporting, sequence, detail, duplicate, lowQuality
+}
+
+/// Local editorial metadata used by Smart Draft.  It contains only geometry
+/// and deterministic scores derived from photos the user already approved.
+struct MemoryBookEditorialProfile: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID { photoID }
+    let photoID: UUID
+    let eventKey: String
+    let role: MemoryBookPhotoRole
+    let qualityScore: Double
+    let heroScore: Double
+    let duplicateGroupID: String?
+}
+
+struct MemoryBookDraftSummary: Codable, Equatable, Sendable {
+    let selectedPhotoCount: Int
+    let eventCount: Int
+    let duplicateCount: Int
+    let estimatedPageCount: Int
+    let profiles: [MemoryBookEditorialProfile]
+}
+
+struct StoryPlanEventGroup: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var eventKey: String
+    var dateLabel: String
+    var photoIDs: [UUID]
+
+    init(id: UUID = UUID(), eventKey: String, dateLabel: String, photoIDs: [UUID]) {
+        self.id = id
+        self.eventKey = eventKey
+        self.dateLabel = dateLabel
+        self.photoIDs = photoIDs
+    }
+}
+
+struct StoryPlanChapterCandidate: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var title: String
+    var dateLabel: String
+    var note: String
+    var photoIDs: [UUID]
+    var representativePhotoID: UUID?
+    var isHidden: Bool
+    var sortOrder: Int
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        dateLabel: String,
+        note: String = "",
+        photoIDs: [UUID],
+        representativePhotoID: UUID? = nil,
+        isHidden: Bool = false,
+        sortOrder: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.dateLabel = dateLabel
+        self.note = note
+        self.photoIDs = photoIDs
+        self.representativePhotoID = representativePhotoID
+        self.isHidden = isHidden
+        self.sortOrder = sortOrder
+    }
+}
+
+struct StoryPlanDuplicateGroup: Identifiable, Codable, Equatable, Sendable {
+    var id: String { groupID }
+    var groupID: String
+    var retainedPhotoID: UUID
+    var duplicatePhotoIDs: [UUID]
+}
+
+enum StoryPlanDraftState: String, Codable, Sendable {
+    case generated, confirmed
+}
+
+/// The complete, pre-document output of Smart Draft. It contains semantic
+/// planning only: no MemoryBookPage or rendered geometry may be materialized
+/// until Book Style atomically creates the first document revision.
+struct StoryPlanDraft: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var petProfileID: UUID
+    var sourceMatchGenerationID: String?
+    var eventGroups: [StoryPlanEventGroup]
+    var chapterCandidates: [StoryPlanChapterCandidate]
+    var photoProfiles: [MemoryBookEditorialProfile]
+    var duplicateGroups: [StoryPlanDuplicateGroup]
+    var suggestedPageCount: Int
+    var state: StoryPlanDraftState
+    var createdAt: Date
+    var updatedAt: Date
+    var confirmedAt: Date?
+
+    init(
+        id: UUID = UUID(),
+        petProfileID: UUID,
+        sourceMatchGenerationID: String? = nil,
+        eventGroups: [StoryPlanEventGroup],
+        chapterCandidates: [StoryPlanChapterCandidate],
+        photoProfiles: [MemoryBookEditorialProfile],
+        duplicateGroups: [StoryPlanDuplicateGroup],
+        suggestedPageCount: Int,
+        state: StoryPlanDraftState = .generated,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        confirmedAt: Date? = nil
+    ) {
+        self.id = id
+        self.petProfileID = petProfileID
+        self.sourceMatchGenerationID = sourceMatchGenerationID
+        self.eventGroups = eventGroups
+        self.chapterCandidates = chapterCandidates
+        self.photoProfiles = photoProfiles
+        self.duplicateGroups = duplicateGroups
+        self.suggestedPageCount = suggestedPageCount
+        self.state = state
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.confirmedAt = confirmedAt
+    }
+}
+
+extension StoryPlanDraft {
+    var chapters: [Chapter] {
+        chapterCandidates.sorted { $0.sortOrder < $1.sortOrder }.map {
+            Chapter(
+                id: $0.id,
+                title: $0.title,
+                dateLabel: $0.dateLabel,
+                note: $0.note,
+                photoIDs: $0.photoIDs,
+                isHidden: $0.isHidden,
+                sortOrder: $0.sortOrder,
+                needsReflow: false
+            )
+        }
+    }
+
+    mutating func replaceChapters(_ chapters: [Chapter], state: StoryPlanDraftState? = nil) {
+        chapterCandidates = chapters.sorted { $0.sortOrder < $1.sortOrder }.map {
+            StoryPlanChapterCandidate(
+                id: $0.id,
+                title: $0.title,
+                dateLabel: $0.dateLabel,
+                note: $0.note,
+                photoIDs: $0.photoIDs,
+                representativePhotoID: $0.photoIDs.first,
+                isHidden: $0.isHidden,
+                sortOrder: $0.sortOrder
+            )
+        }
+        if let state { self.state = state }
+        updatedAt = .now
+        confirmedAt = self.state == .confirmed ? .now : nil
+    }
+
+    static func migrating(
+        profile: PetProfile,
+        photos: [ArchivePhoto],
+        chapters: [Chapter],
+        sourceMatchGenerationID: String?
+    ) -> StoryPlanDraft {
+        let summary = MemoryBookBuilder.analyze(photos: photos)
+        let groups = chapters.sorted { $0.sortOrder < $1.sortOrder }.map {
+            StoryPlanEventGroup(id: $0.id, eventKey: $0.dateLabel, dateLabel: $0.dateLabel, photoIDs: $0.photoIDs)
+        }
+        let candidates = chapters.sorted { $0.sortOrder < $1.sortOrder }.map {
+            StoryPlanChapterCandidate(
+                id: $0.id,
+                title: $0.title,
+                dateLabel: $0.dateLabel,
+                note: $0.note,
+                photoIDs: $0.photoIDs,
+                representativePhotoID: $0.photoIDs.first,
+                isHidden: $0.isHidden,
+                sortOrder: $0.sortOrder
+            )
+        }
+        let duplicateGroups = Dictionary(grouping: photos.compactMap { photo -> (String, UUID)? in
+            photo.visualDuplicateGroupID.map { ($0, photo.id) }
+        }, by: { $0.0 }).compactMap { groupID, members -> StoryPlanDuplicateGroup? in
+            let ids = members.map(\.1)
+            guard let retained = ids.first else { return nil }
+            return StoryPlanDuplicateGroup(groupID: groupID, retainedPhotoID: retained, duplicatePhotoIDs: Array(ids.dropFirst()))
+        }.sorted { $0.groupID < $1.groupID }
+        return StoryPlanDraft(
+            petProfileID: profile.id,
+            sourceMatchGenerationID: sourceMatchGenerationID,
+            eventGroups: groups,
+            chapterCandidates: candidates,
+            photoProfiles: summary.profiles,
+            duplicateGroups: duplicateGroups,
+            suggestedPageCount: summary.estimatedPageCount,
+            state: .confirmed,
+            createdAt: .distantPast,
+            updatedAt: .distantPast,
+            confirmedAt: .distantPast
+        )
+    }
+}
+
+enum StoryPlanWorkflowError: LocalizedError, Equatable {
+    case insufficientEligiblePhotos
+    case missingDraft
+    case unconfirmedDraft
+    case documentAlreadyExists
+    case missingDocument
+
+    var errorDescription: String? {
+        switch self {
+        case .insufficientEligiblePhotos: "Choose at least 3 confirmed photos before creating a memory book."
+        case .missingDraft: "The story plan is unavailable. Create the draft again."
+        case .unconfirmedDraft: "Review and confirm the story before choosing a book style."
+        case .documentAlreadyExists: "This archive already has a book. Apply style changes to the existing revision instead."
+        case .missingDocument: "The existing book could not be found."
+        }
+    }
+}
+
+/// Pure aggregate transactions for pages 07–09. Repository persistence wraps
+/// the returned value, so a failed save cannot publish a half-created book to
+/// the UI or leave two competing MemoryBookDocument instances.
+enum StoryPlanWorkflow {
+    static func generateDraft(from source: ArchiveDocument, simple: Bool = false, at date: Date = .now) throws -> ArchiveDocument {
+        let chosen = source.photos.filter(\.isEligibleForArchive)
+        guard chosen.count >= 3 else { throw StoryPlanWorkflowError.insufficientEligiblePhotos }
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: chosen) { photo in
+            (photo.localDateRange?.start ?? photo.createdAt).map { calendar.component(.year, from: $0) }
+                ?? source.profile.departureYear
+        }
+        let chapters = grouped.keys.sorted().enumerated().map { index, year in
+            Chapter(
+                id: UUID(),
+                title: "Days together",
+                dateLabel: String(year),
+                photoIDs: grouped[year, default: []].sorted {
+                    ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast)
+                }.map(\.id),
+                isHidden: false,
+                sortOrder: index
+            )
+        }
+        var draft = StoryPlanDraft.migrating(
+            profile: source.profile,
+            photos: chosen,
+            chapters: chapters,
+            sourceMatchGenerationID: source.activeRecognitionGeneration?.matchGenerationID
+        )
+        draft.state = .generated
+        draft.createdAt = date
+        draft.updatedAt = date
+        draft.confirmedAt = nil
+        if simple { draft.duplicateGroups = [] }
+
+        var result = source
+        result.storyPlanDraft = draft
+        // Page 07 is semantic only. Legacy chapters and any existing document
+        // snapshot are deliberately untouched; first-flow archives have none.
+        result.archiveCheckpoint = ArchiveCheckpoint(stage: .smartDraft, smartDraftStepCursor: "complete", updatedAt: date)
+        result.updatedAt = date
+        return result
+    }
+
+    static func confirm(_ source: ArchiveDocument, chapters: [Chapter], at date: Date = .now) throws -> ArchiveDocument {
+        guard var draft = source.storyPlanDraft else { throw StoryPlanWorkflowError.missingDraft }
+        draft.replaceChapters(chapters, state: .confirmed)
+        draft.updatedAt = date
+        draft.confirmedAt = date
+        var result = source
+        result.storyPlanDraft = draft
+        result.archiveCheckpoint = ArchiveCheckpoint(stage: .stylePending, updatedAt: date)
+        result.updatedAt = date
+        return result
+    }
+
+    static func createFirstDocument(from source: ArchiveDocument, style: AlbumStyle, paper: PDFPageSize, at date: Date = .now) throws -> ArchiveDocument {
+        guard source.memoryBook == nil else { throw StoryPlanWorkflowError.documentAlreadyExists }
+        guard let draft = source.storyPlanDraft else { throw StoryPlanWorkflowError.missingDraft }
+        guard draft.state == .confirmed else { throw StoryPlanWorkflowError.unconfirmedDraft }
+        let chapters = draft.chapters
+        var book = MemoryBookBuilder.build(profile: source.profile, photos: source.photos, chapters: chapters, style: style, pageSize: paper)
+        book.updatedAt = date
+        var result = source
+        result.profile.albumStyle = style
+        result.chapters = chapters
+        result.memoryBook = book
+        result.archiveCheckpoint = ArchiveCheckpoint(stage: .documentReady, updatedAt: date)
+        result.updatedAt = date
+        return result
+    }
+
+    static func markExistingDocumentNeedsReflow(_ source: ArchiveDocument, style: AlbumStyle, paper: PDFPageSize, at date: Date = .now) throws -> ArchiveDocument {
+        guard var book = source.memoryBook else { throw StoryPlanWorkflowError.missingDocument }
+        let chapters = source.storyPlanDraft?.chapters ?? source.chapters
+        book.style = style
+        book.pageSize = paper
+        book.chapters = chapters
+        for index in book.pages.indices where !book.pages[index].isLocked {
+            book.pages[index].needsReflow = true
+        }
+        book.beginNewRevision(at: date)
+        var result = source
+        result.profile.albumStyle = style
+        result.chapters = chapters
+        result.memoryBook = book
+        result.archiveCheckpoint = ArchiveCheckpoint(stage: .documentReady, updatedAt: date)
+        result.updatedAt = date
+        return result
+    }
+}
+
+enum ArchiveWorkflowTransaction {
+    static func advancing(_ source: ArchiveDocument, to stage: ArchiveCheckpointStage, cursor: String? = nil, at date: Date = .now) -> ArchiveDocument {
+        var result = source
+        result.archiveCheckpoint = ArchiveCheckpoint(stage: stage, smartDraftStepCursor: cursor, updatedAt: date)
+        result.updatedAt = date
+        return result
+    }
+}
+
+enum MemoryBookTemplateApplicationMode: String, Codable, CaseIterable, Sendable {
+    case visualOnly
+    case rearrangeUnlocked
+}
+
+struct MemoryBookTemplateApplicationSummary: Equatable, Sendable {
+    let targetStyle: AlbumStyle
+    let affectedPageCount: Int
+    let protectedPageCount: Int
+    let mode: MemoryBookTemplateApplicationMode
+}
+
+enum MemoryBookTemplatePolicy {
+    static func capacity(for style: AlbumStyle, pageOrdinal: Int) -> Int {
+        switch style {
+        case .warmPaper: 2
+        case .quietNight: 2
+        case .fieldNotes: 6
+        case .cinema: 1
+        case .filmAlbum: 4
+        }
+    }
+
+    static func layout(for style: AlbumStyle, photoCount: Int, pageOrdinal: Int) -> MemoryBookLayout {
+        guard photoCount > 0 else { return .note }
+        switch style {
+        case .cinema: return .single
+        case .quietNight: return photoCount == 1 ? .single : .diptych
+        case .fieldNotes:
+            if photoCount == 1 { return .single }
+            if photoCount == 2 { return .diptych }
+            if photoCount <= 4 { return .grid2x2 }
+            return .grid3x2
+        case .filmAlbum:
+            if photoCount == 1 { return .single }
+            if photoCount == 2 { return .diptych }
+            return .grid2x2
+        case .warmPaper:
+            if photoCount == 1 { return .single }
+            return .diptych
+        }
+    }
+}
+
+extension MemoryBookDocument {
+    var automaticallyReflowablePageIDs: Set<UUID> {
+        Set(pages.compactMap { page in
+            guard page.kind == .photoSelection, !page.isLocked,
+                  !page.elements.contains(where: { $0.isLayoutLocked || $0.origin == .user }) else { return nil }
+            return page.id
+        })
+    }
+
+    func templateApplicationSummary(style: AlbumStyle, mode: MemoryBookTemplateApplicationMode) -> MemoryBookTemplateApplicationSummary {
+        let reflowable = automaticallyReflowablePageIDs
+        let photoPages = pages.filter { $0.kind == .photoSelection }
+        return MemoryBookTemplateApplicationSummary(
+            targetStyle: style,
+            affectedPageCount: mode == .visualOnly ? pages.count : reflowable.count,
+            protectedPageCount: mode == .visualOnly ? 0 : photoPages.count - reflowable.count,
+            mode: mode
+        )
+    }
+
+    /// Applies the chosen template without ever touching user-authored
+    /// geometry. Visual-only changes renderer tokens. Rearrangement is limited
+    /// to pages with no locked/user element and is therefore safe by default.
+    mutating func applyTemplate(style newStyle: AlbumStyle, mode: MemoryBookTemplateApplicationMode) {
+        let candidates = automaticallyReflowablePageIDs
+        style = newStyle
+        guard mode == .rearrangeUnlocked else { updatedAt = .now; return }
+        for pageID in candidates {
+            guard let page = pages.first(where: { $0.id == pageID }) else { continue }
+            let layout = MemoryBookTemplatePolicy.layout(for: newStyle, photoCount: page.photoIDs.count, pageOrdinal: page.pageNumber)
+            _ = applyLayoutChange(pageID: pageID, layout: layout)
+        }
+        applyAutomaticTemplateAccents()
+        updatedAt = .now
+    }
+
+    mutating func applyAutomaticTemplateAccents() {
+        let photosByID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
+        for pageIndex in pages.indices {
+            for elementIndex in pages[pageIndex].elements.indices {
+                guard pages[pageIndex].elements[elementIndex].kind == .image,
+                      pages[pageIndex].elements[elementIndex].origin == .automatic,
+                      !pages[pageIndex].elements[elementIndex].isLayoutLocked else { continue }
+                switch style {
+                case .cinema:
+                    pages[pageIndex].elements[elementIndex].imageContentMode = .fill
+                    pages[pageIndex].elements[elementIndex].rotationDegrees = 0
+                case .filmAlbum:
+                    pages[pageIndex].elements[elementIndex].imageContentMode = .fit
+                    pages[pageIndex].elements[elementIndex].rotationDegrees = elementIndex.isMultiple(of: 2) ? -2.2 : 2.2
+                    pages[pageIndex].elements[elementIndex].appearance.borderStyle = .solid
+                    pages[pageIndex].elements[elementIndex].appearance.borderWidthRatio = 4 / 612
+                    pages[pageIndex].elements[elementIndex].appearance.shadowOpacity = 0.18
+                case .warmPaper:
+                    pages[pageIndex].elements[elementIndex].rotationDegrees = 0
+                    if pages[pageIndex].kind == .photoSelection {
+                        pages[pageIndex].elements[elementIndex].imageContentMode = .fit
+                    }
+                default:
+                    pages[pageIndex].elements[elementIndex].rotationDegrees = 0
+                    if pages[pageIndex].kind == .photoSelection {
+                        let assetID = pages[pageIndex].elements[elementIndex].assetID
+                        // A known pet-safe subject region makes an editorial
+                        // fill deterministic. Without it, preserve every pixel.
+                        pages[pageIndex].elements[elementIndex].imageContentMode = assetID.flatMap { photosByID[$0]?.subjectRegion } == nil ? .fit : .fill
+                    }
+                }
+            }
+        }
+        _ = normalizeFitImageFramesToAssetAspect()
+    }
+}
+
 enum MemoryBookBuilder {
+    static func analyze(photos: [ArchivePhoto]) -> MemoryBookDraftSummary {
+        let eligible = photos.filter(\.isEligibleForArchive).sorted {
+            ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast)
+        }
+        let calendar = Calendar.current
+        let duplicateGroups = Dictionary(grouping: eligible.compactMap(\.visualDuplicateGroupID), by: { $0 })
+        var seenGroups = Set<String>()
+        let profiles = eligible.enumerated().map { index, photo in
+            let eventKey = photo.createdAt.map { String(calendar.component(.year, from: $0)) } ?? "Undated"
+            let pixels = photo.pixelSize.map { Double($0.width * $0.height) } ?? 0
+            let quality = min(1, max(0, pixels > 0 ? pixels / 12_000_000 : photo.confidence))
+            let isDuplicate = photo.visualDuplicateGroupID.map { !seenGroups.insert($0).inserted } ?? false
+            let role: MemoryBookPhotoRole
+            if isDuplicate { role = .duplicate }
+            else if pixels > 0 && pixels < 1_000_000 { role = .lowQuality }
+            else if index == 0 || index == eligible.count - 1 || photo.confidence >= 0.9 { role = .hero }
+            else if index > 0, calendar.isDate(photo.createdAt ?? .distantPast, inSameDayAs: eligible[index - 1].createdAt ?? .distantFuture) { role = .sequence }
+            else { role = .supporting }
+            return MemoryBookEditorialProfile(photoID: photo.id, eventKey: eventKey, role: role, qualityScore: quality, heroScore: min(1, photo.confidence * 0.65 + quality * 0.35), duplicateGroupID: photo.visualDuplicateGroupID)
+        }
+        let events = Set(profiles.map(\.eventKey)).count
+        let duplicates = duplicateGroups.values.reduce(0) { $0 + max(0, $1.count - 1) }
+        let estimatedPages = max(6, 4 + events + Int(ceil(Double(max(1, eligible.count - duplicates)) / 3.0)))
+        return MemoryBookDraftSummary(selectedPhotoCount: eligible.count, eventCount: events, duplicateCount: duplicates, estimatedPageCount: estimatedPages, profiles: profiles)
+    }
+
     static func optionalTextFields(for kind: MemoryBookPageKind) -> [MemoryBookTextField] {
         switch kind {
         case .chapterOpener: [.chapterNote]
@@ -2957,7 +4733,7 @@ enum MemoryBookBuilder {
             let height = min(0.40, (0.48 - gap * CGFloat(rows - 1)) / CGFloat(rows))
             for (index, photo) in photos.prefix(layout.photoCapacity).enumerated() {
                 let row = index / columns; let column = index % columns
-                result.append(MemoryBookElement(kind: .image, assetID: photo, normalizedFrame: CGRect(x: 0.08 + CGFloat(column) * (width + gap), y: 0.27 + CGFloat(row) * (height + gap), width: width, height: height)))
+                result.append(MemoryBookElement(kind: .image, assetID: photo, normalizedFrame: CGRect(x: 0.08 + CGFloat(column) * (width + gap), y: 0.27 + CGFloat(row) * (height + gap), width: width, height: height), imageContentMode: .fit))
             }
         }
         return result
@@ -2973,8 +4749,11 @@ enum MemoryBookBuilder {
         var pages: [MemoryBookPage] = []
         func append(_ kind: MemoryBookPageKind, _ title: String, _ subtitle: String = "", chapter: Chapter? = nil, photos: [UUID] = [], layout: MemoryBookLayout = .note) {
             let pageElements = MemoryBookBuilder.elements(kind: kind, title: title, subtitle: subtitle, photos: photos, layout: layout)
-            let structural = kind == .cover || kind == .dedication || kind == .contents || kind == .chapterOpener || kind == .closing
-            pages.append(MemoryBookPage(kind: kind, title: title, subtitle: subtitle, chapterID: chapter?.id, photoIDs: photos, layout: layout, pageNumber: pages.count + 1, elements: pageElements, isLocked: structural))
+            // `isLocked` is an authored protection flag, not a page-kind flag.
+            // Generated structural pages remain editable until the user locks
+            // them, so style/paper transactions can mark every other page for
+            // review while preserving only explicitly protected pages.
+            pages.append(MemoryBookPage(kind: kind, title: title, subtitle: subtitle, chapterID: chapter?.id, photoIDs: photos, layout: layout, pageNumber: pages.count + 1, elements: pageElements))
         }
         let coverPhoto = photos.first(where: { $0.isEligibleForArchive }).map(\.id)
         append(.cover, profile.name, "A life in moments", photos: coverPhoto.map { [$0] } ?? [], layout: .single)
@@ -2985,14 +4764,10 @@ enum MemoryBookBuilder {
             append(.chapterOpener, chapter.title, "\(chapter.dateLabel) · A season together", chapter: chapter, photos: Array(photos.prefix(1)), layout: .single)
             // Keep every user-approved photograph. Pages are chunked so a large
             // chapter remains printable instead of silently truncating at six.
-            let chunks = stride(from: 0, to: photos.count, by: 6).map { Array(photos[$0..<min($0 + 6, photos.count)]) }
-            for chunk in chunks {
-                let layout: MemoryBookLayout = switch chunk.count {
-                case 0...1: .single
-                case 2: .diptych
-                case 4: .grid2x2
-                default: .grid3x2
-                }
+            let capacity = MemoryBookTemplatePolicy.capacity(for: style, pageOrdinal: pages.count)
+            let chunks = stride(from: 0, to: photos.count, by: capacity).map { Array(photos[$0..<min($0 + capacity, photos.count)]) }
+            for (chunkIndex, chunk) in chunks.enumerated() {
+                let layout = MemoryBookTemplatePolicy.layout(for: style, photoCount: chunk.count, pageOrdinal: pages.count + chunkIndex)
                 append(.photoSelection, chapter.title, chapter.note.isEmpty ? "Selected moments from \(chapter.dateLabel)." : chapter.note, chapter: chapter, photos: chunk, layout: layout)
             }
         }
@@ -3002,8 +4777,51 @@ enum MemoryBookBuilder {
         }
         append(.closing, "Kept with care.", "Tailor never changes your original photos.")
         var document = MemoryBookDocument(profile: profile, photos: photos, chapters: visible, pages: pages, style: style, pageSize: pageSize)
+        document.applyAutomaticTemplateAccents()
         document.applyAutomaticFocalCrops()
         return document
+    }
+}
+
+struct MemoryBookSamplePlan: Codable, Equatable, Sendable {
+    var documentRevisionID: UUID
+    var pageIDs: [UUID]
+    var totalPageCount: Int
+
+    var samplePageCount: Int { pageIDs.count }
+}
+
+enum MemoryBookSamplePlanner {
+    static func make(for document: MemoryBookDocument) -> MemoryBookSamplePlan {
+        let target = min(8, document.pages.count)
+        guard document.pages.count > target else {
+            return .init(documentRevisionID: document.documentRevisionID, pageIDs: document.pages.map(\.id), totalPageCount: document.pages.count)
+        }
+        var selected: [MemoryBookPage] = []
+        func include(_ page: MemoryBookPage?) {
+            guard let page, selected.count < target, !selected.contains(where: { $0.id == page.id }) else { return }
+            selected.append(page)
+        }
+
+        include(document.pages.first(where: { $0.kind == .cover }))
+        include(document.pages.first(where: { $0.kind == .contents }))
+        // A real dedication/note supplies the sixth structural page for a
+        // single-period three-photo book without inventing another chapter.
+        include(document.pages.first(where: { $0.kind == .dedication || $0.layout == .note }))
+        let openers = document.pages.filter { $0.kind == .chapterOpener }
+        include(openers.first)
+        if Set(openers.compactMap(\.chapterID)).count >= 2 { include(openers.dropFirst().first) }
+        let photoPages = document.pages.filter { $0.kind == .photoSelection || $0.kind == .milestone }
+        include(photoPages.first)
+        if photoPages.count > 1 { include(photoPages.last) }
+        include(document.pages.last(where: { $0.kind == .closing }))
+        for page in document.pages where selected.count < target { include(page) }
+
+        return MemoryBookSamplePlan(
+            documentRevisionID: document.documentRevisionID,
+            pageIDs: selected.sorted { $0.pageNumber < $1.pageNumber }.map(\.id),
+            totalPageCount: document.pages.count
+        )
     }
 }
 
@@ -3025,6 +4843,11 @@ struct ScanAuditMetrics: Codable, Equatable, Sendable {
     var lowPower = 0
     var thermal = 0
     var interrupted = 0
+    /// Number of identity feature prints generated from the 768px request.
+    var highResolutionIdentityImages = 0
+    /// A high-resolution request can be unavailable locally; this remains
+    /// resumable and falls back to the species-gate bitmap for that asset.
+    var identityImageFallbacks = 0
 }
 struct ScanCheckpoint: Codable, Equatable, Sendable {
     var nextAssetIndex: Int
@@ -3081,8 +4904,14 @@ enum ScanArchiveMergePolicy {
                 var merged = candidate
                 merged.id = preserved.id
                 merged.decision = preserved.decision
+                merged.decisionSource = preserved.decisionSource
                 merged.sensitivityState = preserved.sensitivityState
                 merged.excludedReason = preserved.excludedReason
+                merged.sensitiveApprovedAt = preserved.sensitiveApprovedAt
+                merged.matchGenerationID = preserved.matchGenerationID ?? candidate.matchGenerationID
+                merged.staleDecision = preserved.staleDecision
+                merged.isInHiddenPeriod = preserved.isInHiddenPeriod
+                merged.manualAssetID = preserved.manualAssetID
                 merged.visualHash = candidate.visualHash ?? preserved.visualHash
                 merged.subjectRegion = candidate.subjectRegion ?? preserved.subjectRegion
                 result[index] = merged
@@ -3102,20 +4931,16 @@ enum ScanArchiveMergePolicy {
         if completedCheckpoint != nil {
             completedCheckpoint?.candidates = merged
         }
-        return ArchiveDocument(
-            profile: profile,
-            photos: merged,
-            chapters: document.chapters,
-            // Keep completed local coverage for a future explicit delta scan.
-            // Restore only treats a checkpoint as resumable when lifecycle is
-            // `.scanning`, so this never reopens a completed archive on the
-            // scan screen.
-            scanCheckpoint: completedCheckpoint,
-            scanAuditMetrics: document.scanCheckpoint?.auditMetrics ?? document.scanAuditMetrics,
-            memoryBook: document.memoryBook,
-            exportRecords: document.exportRecords,
-            updatedAt: .now
-        )
+        // Mutate a copy so every independently persisted v2.2 contract survives
+        // an incremental scan. Reconstructing the aggregate here used to drop
+        // any field unknown to the scan feature.
+        var completed = document
+        completed.profile = profile
+        completed.photos = merged
+        completed.scanCheckpoint = completedCheckpoint
+        completed.scanAuditMetrics = document.scanCheckpoint?.auditMetrics ?? document.scanAuditMetrics
+        completed.updatedAt = .now
+        return completed
     }
 }
 enum ScanFailure: Error, Equatable, Sendable { case interrupted, unavailable, insufficientAccess, insufficientReferences, lowPower, thermal }

@@ -144,6 +144,11 @@ Implemented and verified:
 55. the pre-crop-gate suite passed 106/106 in `EditorM7-full-unit-r3.xcresult`; after adding the gate, `EditorM7-full-unit-r5.xcresult` passes 107/107 and the unsigned iphoneos Release build succeeds in `artifacts/build/EditorM7-Crop-Gate-Release`;
 56. all six pages of the latest PDF were rendered at 150 DPI and inspected. Rendering is structurally clean, but the simulator's unavailable Vision inference leaves the high portrait cat cropped outside its landscape cell. Physical-device focal output therefore remains a release blocker.
 57. Book Check now blocks any untouched automatic Fill crop that lacks focal metadata and retains less than 65% of its source. The user can intentionally approve it by opening Crop and confirming; `EditorM7-real-photo-crop-gate-ui-r25.xcresult` proves the broken 51%-cropped portrait placements cannot silently reach export.
+58. Book Check now deep-links to the exact photo after changing pages. Its recovery guidance offers Full Photo/frame changes when Crop cannot preserve both subject and print resolution; an unchanged automatic Crop can still be explicitly approved.
+59. Full-screen Crop now exposes repeatable zoom and four-direction precision controls alongside pinch/drag. Photo-panel precision buttons are independent `List` controls; `EditorM7-photo-panel-precision-ui-r4.xcresult` proves three steps persist as 1.3×.
+60. Fit-frame normalization converts physical photo aspect into Letter/A4 normalized coordinates. The inspected `EditorM7-real-photo-fit-aspect-pdf-r40` page preserves the full cat at the correct portrait aspect and aligns its height with the neighboring image.
+61. `EditorM7-real-photo-fit-aspect-ui-r40.xcresult` passes the real PhotoKit repair/export flow; `EditorM7-book-check-text-deeplink-ui-r2.xcresult` preserves exact text-field navigation through a long issue list.
+62. `EditorM7-full-unit-r7.xcresult` passes 108/108. The unsigned iphoneos Release build succeeds in `artifacts/build/EditorM7-Fit-Crop-Release`; Release QA-marker scanning and `git diff --check` are clean.
 
 Next execution slice:
 
@@ -162,4 +167,4 @@ Next execution slice:
 | M4 photo finishing | Implementation complete; device/design gate pending | Round-trip, pixel-change, PDF and UI tests pass; real-photo phone/300-DPI matrix and named aesthetic approval remain |
 | M5 typography | Implementation complete; device/design gate pending | Shared persistence/rendering, Unicode/overflow, 11pt print floor, contrast repair, 94/94 unit and focused UI tests pass; real multilingual print matrix remains |
 | M6 guided beauty | Implementation complete; real-photo design gate pending | 101/101 unit tests, focused contrast/alignment/chapter-scope UI tests and Release build pass; focal-aware variants and named design review remain in M7 |
-| M7 evidence/framework decision | In progress | Focal crop, prototype audit, v1 Mantis no-go, 107/107 regression, real-PhotoKit simulator flow, inspected 300-PPI grid and severe-crop export gate pass. Physical-device/user-photo/A4/Letter focal validation and signed release decision remain |
+| M7 evidence/framework decision | In progress | Focal crop, prototype audit, v1 Mantis no-go, 108/108 regression, real-PhotoKit simulator flow, inspected physical-aspect Fit repair, 300-PPI grid and severe-crop export gate pass. Physical-device/user-photo/A4 focal validation and signed release decision remain |

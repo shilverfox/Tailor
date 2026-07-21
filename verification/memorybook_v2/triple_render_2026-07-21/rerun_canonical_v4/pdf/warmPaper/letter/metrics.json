@@ -1,0 +1,65 @@
+{
+  "evidenceScope" : "Deterministic PDF raster and manifest evidence only; not an approved-reference pixel comparison.",
+  "pageCount" : 7,
+  "pages" : [
+    {
+      "heightPoints" : 792,
+      "pageKind" : "cover",
+      "pageNumber" : 1,
+      "pngBytes" : 2578751,
+      "sampledColorCount" : 145,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "dedication",
+      "pageNumber" : 2,
+      "pngBytes" : 3718087,
+      "sampledColorCount" : 158,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "contents",
+      "pageNumber" : 3,
+      "pngBytes" : 3709299,
+      "sampledColorCount" : 109,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "chapterOpener",
+      "pageNumber" : 4,
+      "pngBytes" : 2563438,
+      "sampledColorCount" : 115,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "photoSelection",
+      "pageNumber" : 5,
+      "pngBytes" : 2786085,
+      "sampledColorCount" : 170,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "milestone",
+      "pageNumber" : 6,
+      "pngBytes" : 2553292,
+      "sampledColorCount" : 120,
+      "widthPoints" : 612
+    },
+    {
+      "heightPoints" : 792,
+      "pageKind" : "closing",
+      "pageNumber" : 7,
+      "pngBytes" : 3700147,
+      "sampledColorCount" : 79,
+      "widthPoints" : 612
+    }
+  ],
+  "paper" : "letter",
+  "pdfBytes" : 3782506,
+  "style" : "warmPaper"
+}

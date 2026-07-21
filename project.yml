@@ -9,7 +9,7 @@ targets:
     sources: [Tailor]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tailor.prototype
+        PRODUCT_BUNDLE_IDENTIFIER: com.shilverfox.tailor
         SWIFT_VERSION: 5.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Tailor

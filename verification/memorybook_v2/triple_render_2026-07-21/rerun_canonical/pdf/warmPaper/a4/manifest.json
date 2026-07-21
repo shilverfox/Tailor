@@ -1,0 +1,3309 @@
+{
+  "documentID" : "00000000-0000-0000-0000-000000000101",
+  "pageSize" : "a4",
+  "plans" : [
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000205",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000702",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.27
+            ],
+            [
+              0.84,
+              0.4
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 6,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 0
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000701",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.17
+            ],
+            [
+              0.84,
+              0.06
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "A life in moments",
+          "textColor" : "ink",
+          "textField" : "coverSubtitle",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 9
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000700",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.08
+            ],
+            [
+              0.84,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Milo",
+          "textColor" : "ink",
+          "textField" : "coverPetName",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 10
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000501",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000701",
+          "field" : "coverSubtitle",
+          "measurement" : {
+            "availableHeight" : 48.42,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 17,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    154.69
+                  ],
+                  [
+                    116.743046875,
+                    19.877812499999997
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                116.743046875,
+                19.877812499999997
+              ]
+            ],
+            "requiredHeight" : 19.877812499999997,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 17
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 14.559999999999999,
+            "kern" : 0,
+            "lineHeight" : 19.877812499999997,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                470.4,
+                48.42
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "A life in moments"
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000700",
+          "field" : "coverPetName",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 4,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    82.06
+                  ],
+                  [
+                    51.655078125,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                51.655078125,
+                34.40390625
+              ]
+            ],
+            "requiredHeight" : 34.40390625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 4
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                470.4,
+                80.7
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Milo"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000721",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.12,
+              0.37
+            ],
+            [
+              0.72,
+              0.28
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "مرحبا Milo 👨‍👩‍👧‍👦\né · 点点 — kept exactly as written.\nEvery place still feels like home.",
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 11
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000720",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.12,
+              0.2
+            ],
+            [
+              0.68,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "For Milo",
+          "textColor" : "ink",
+          "textField" : "dedicationMessage",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1.137,
+          "textStyle" : "large",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 12
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000502",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000721",
+          "measurement" : {
+            "availableHeight" : 225.96,
+            "availableLines" : 6,
+            "consumedUTF16Length" : 92,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    344.5776305379747,
+                    316.09
+                  ],
+                  [
+                    143.3223694620253,
+                    37.82162776898734
+                  ]
+                ]
+              },
+              {
+                "rect" : [
+                  [
+                    104.80585937499997,
+                    353.49390625002326
+                  ],
+                  [
+                    383.094140625,
+                    34.40390625
+                  ]
+                ]
+              },
+              {
+                "rect" : [
+                  [
+                    128.44316406249993,
+                    387.89781250004654
+                  ],
+                  [
+                    359.45683593750005,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                84.7,
+                316.09
+              ],
+              [
+                383.094140625,
+                103.21171874999999
+              ]
+            ],
+            "requiredHeight" : 103.21171874999999,
+            "requiredLines" : 3,
+            "totalUTF16Length" : 92
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                84.7,
+                316.09
+              ],
+              [
+                403.2,
+                225.96
+              ]
+            ],
+            "writingDirection" : "rightToLeft"
+          },
+          "style" : "standard",
+          "value" : "مرحبا Milo 👨‍👩‍👧‍👦\né · 点点 — kept exactly as written.\nEvery place still feels like home."
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000720",
+          "field" : "dedicationMessage",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 1,
+            "consumedUTF16Length" : 8,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    84.7,
+                    178.9
+                  ],
+                  [
+                    134.703214734375,
+                    47.723034515625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                84.7,
+                178.9
+              ],
+              [
+                134.703214734375,
+                47.723034515625
+              ]
+            ],
+            "requiredHeight" : 47.723034515625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 8
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 34.955928,
+            "kern" : 0,
+            "lineHeight" : 47.723034515625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                84.7,
+                178.9
+              ],
+              [
+                380.8,
+                80.7
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "large",
+          "value" : "For Milo"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000741",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.12,
+              0.3
+            ],
+            [
+              0.7,
+              0.34
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Early days · 4\nDays together · 5\nKept close · 7",
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 11
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000740",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.1,
+              0.1
+            ],
+            [
+              0.7,
+              0.09
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Contents",
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "large",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 12
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000503",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000741",
+          "measurement" : {
+            "availableHeight" : 274.38,
+            "availableLines" : 7,
+            "consumedUTF16Length" : 47,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    84.7,
+                    259.6
+                  ],
+                  [
+                    149.23125,
+                    34.40390625
+                  ]
+                ]
+              },
+              {
+                "rect" : [
+                  [
+                    84.7,
+                    294.0039062500233
+                  ],
+                  [
+                    191.42402343749998,
+                    34.40390625
+                  ]
+                ]
+              },
+              {
+                "rect" : [
+                  [
+                    84.7,
+                    328.4078125000466
+                  ],
+                  [
+                    150.90468749999997,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                84.7,
+                259.6
+              ],
+              [
+                191.42402343749998,
+                103.21171874999999
+              ]
+            ],
+            "requiredHeight" : 103.21171874999999,
+            "requiredLines" : 3,
+            "totalUTF16Length" : 47
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                84.7,
+                259.6
+              ],
+              [
+                392,
+                274.38
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Early days · 4\nDays together · 5\nKept close · 7"
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000740",
+          "measurement" : {
+            "availableHeight" : 72.63,
+            "availableLines" : 1,
+            "consumedUTF16Length" : 8,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    73.5,
+                    98.2
+                  ],
+                  [
+                    125.31782812499999,
+                    41.972765624999994
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                73.5,
+                98.2
+              ],
+              [
+                125.31782812499999,
+                41.972765624999994
+              ]
+            ],
+            "requiredHeight" : 41.972765624999994,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 8
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 30.744,
+            "kern" : 0,
+            "lineHeight" : 41.972765624999994,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                73.5,
+                98.2
+              ],
+              [
+                392,
+                72.63
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "large",
+          "value" : "Contents"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000206",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000762",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.27
+            ],
+            [
+              0.84,
+              0.4
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 0
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000761",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.17
+            ],
+            [
+              0.84,
+              0.06
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "2019–2021",
+          "textColor" : "ink",
+          "textField" : "chapterDateRange",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 9
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000760",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.08
+            ],
+            [
+              0.84,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Days together",
+          "textColor" : "ink",
+          "textField" : "chapterTitle",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 10
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000504",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000761",
+          "field" : "chapterDateRange",
+          "measurement" : {
+            "availableHeight" : 48.42,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 9,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    154.69
+                  ],
+                  [
+                    72.060625,
+                    19.877812499999997
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                72.060625,
+                19.877812499999997
+              ]
+            ],
+            "requiredHeight" : 19.877812499999997,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 9
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 14.559999999999999,
+            "kern" : 0,
+            "lineHeight" : 19.877812499999997,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                470.4,
+                48.42
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "2019–2021"
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000760",
+          "field" : "chapterTitle",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 13,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    82.06
+                  ],
+                  [
+                    156.40488281249998,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                156.40488281249998,
+                34.40390625
+              ]
+            ],
+            "requiredHeight" : 34.40390625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 13
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                470.4,
+                80.7
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Days together"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000203",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000784",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fit",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.52
+            ],
+            [
+              0.41,
+              0.22999999999999998
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 0
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000204",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000785",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.51,
+              0.52
+            ],
+            [
+              0.41,
+              0.22999999999999998
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 0
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000201",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000782",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fit",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.32
+            ],
+            [
+              0.44,
+              0.34
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : -8,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 4
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000202",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000783",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.36,
+              0.38
+            ],
+            [
+              0.46,
+              0.34
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 12,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 8
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000781",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.17
+            ],
+            [
+              0.84,
+              0.06
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "A few of the days we kept.",
+          "textColor" : "ink",
+          "textField" : "photoCaption",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 9
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000780",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.08
+            ],
+            [
+              0.84,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Small adventures",
+          "textColor" : "ink",
+          "textField" : "photoTitle",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 10
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000505",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000781",
+          "field" : "photoCaption",
+          "measurement" : {
+            "availableHeight" : 48.42,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 26,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    154.69
+                  ],
+                  [
+                    170.95914062500003,
+                    19.877812499999997
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                170.95914062500003,
+                19.877812499999997
+              ]
+            ],
+            "requiredHeight" : 19.877812499999997,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 26
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 14.559999999999999,
+            "kern" : 0,
+            "lineHeight" : 19.877812499999997,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                470.4,
+                48.42
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "A few of the days we kept."
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000780",
+          "field" : "photoTitle",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 16,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    82.06
+                  ],
+                  [
+                    192.48222656250002,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                192.48222656250002,
+                34.40390625
+              ]
+            ],
+            "requiredHeight" : 34.40390625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 16
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                470.4,
+                80.7
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Small adventures"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "assetID" : "00000000-0000-0000-0000-000000000207",
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000802",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "image",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.27
+            ],
+            [
+              0.84,
+              0.4
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 0
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000801",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.17
+            ],
+            [
+              0.84,
+              0.06
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "The first year we saved together.",
+          "textColor" : "ink",
+          "textField" : "milestoneNote",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 9
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000800",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.08
+            ],
+            [
+              0.84,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "2017",
+          "textColor" : "ink",
+          "textField" : "milestoneDate",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 10
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000506",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000801",
+          "field" : "milestoneNote",
+          "measurement" : {
+            "availableHeight" : 48.42,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 33,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    154.69
+                  ],
+                  [
+                    210.60812499999997,
+                    19.877812499999997
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                210.60812499999997,
+                19.877812499999997
+              ]
+            ],
+            "requiredHeight" : 19.877812499999997,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 33
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 14.559999999999999,
+            "kern" : 0,
+            "lineHeight" : 19.877812499999997,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                470.4,
+                48.42
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "The first year we saved together."
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000800",
+          "field" : "milestoneDate",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 4,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    82.06
+                  ],
+                  [
+                    56.06015625,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                56.06015625,
+                34.40390625
+              ]
+            ],
+            "requiredHeight" : 34.40390625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 4
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                470.4,
+                80.7
+              ]
+            ],
+            "writingDirection" : "natural"
+          },
+          "style" : "standard",
+          "value" : "2017"
+        }
+      ]
+    },
+    {
+      "canonicalPageSize" : [
+        595,
+        842
+      ],
+      "orderedElements" : [
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000821",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.17
+            ],
+            [
+              0.84,
+              0.06
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Tailor never changes your original photos.",
+          "textColor" : "ink",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 9
+        },
+        {
+          "appearance" : {
+            "borderColor" : {
+              "blue" : 1,
+              "green" : 1,
+              "red" : 1
+            },
+            "borderStyle" : "none",
+            "borderWidthRatio" : 0.0032679738562091504,
+            "cornerRadiusRatio" : 0.006535947712418301,
+            "mask" : "roundedRectangle",
+            "opacity" : 1,
+            "shadowBlurRatio" : 0.013071895424836602,
+            "shadowOffset" : [
+              0,
+              0
+            ],
+            "shadowOpacity" : 0
+          },
+          "cropOffset" : [
+            0,
+            0
+          ],
+          "cropScale" : 1,
+          "id" : "00000000-0000-0000-0000-000000000820",
+          "imageAdjustments" : {
+            "brightness" : 0,
+            "contrast" : 1,
+            "exposure" : 0,
+            "highlights" : 0,
+            "saturation" : 1,
+            "shadows" : 0,
+            "sharpness" : 0,
+            "vignette" : 0,
+            "warmth" : 0
+          },
+          "imageContentMode" : "fill",
+          "imageTransformAdjustments" : {
+            "flipHorizontal" : false,
+            "flipVertical" : false,
+            "straightenDegrees" : 0
+          },
+          "isHidden" : false,
+          "isInteractionLocked" : false,
+          "isLayoutLocked" : false,
+          "kind" : "text",
+          "normalizedFrame" : [
+            [
+              0.08,
+              0.08
+            ],
+            [
+              0.84,
+              0.1
+            ]
+          ],
+          "origin" : "automatic",
+          "rotationDegrees" : 0,
+          "text" : "Kept with care.",
+          "textColor" : "ink",
+          "textField" : "closingMessage",
+          "textFont" : "systemSerif",
+          "textFontScale" : 1,
+          "textStyle" : "standard",
+          "textTypographyAdjustments" : {
+            "alignment" : "leading",
+            "lineHeightMultiple" : 1.22,
+            "paragraphSpacingEm" : 0,
+            "trackingEm" : 0
+          },
+          "updatedAt" : 757382400,
+          "zIndex" : 10
+        }
+      ],
+      "pageID" : "00000000-0000-0000-0000-000000000507",
+      "pageRect" : [
+        [
+          0,
+          0
+        ],
+        [
+          595,
+          842
+        ]
+      ],
+      "pageSize" : [
+        595,
+        842
+      ],
+      "paperColor" : {
+        "blue" : 0.9098039215686274,
+        "green" : 0.9529411764705882,
+        "red" : 0.9725490196078431
+      },
+      "paperRect" : [
+        [
+          17.5,
+          17.5
+        ],
+        [
+          560,
+          807
+        ]
+      ],
+      "safeRect" : [
+        [
+          56.7,
+          73.99000000000001
+        ],
+        [
+          481.6,
+          694.02
+        ]
+      ],
+      "style" : {
+        "accent" : {
+          "blue" : 0.2235294117647059,
+          "green" : 0.33725490196078434,
+          "red" : 0.7215686274509804
+        },
+        "backdrop" : {
+          "blue" : 0.8196078431372549,
+          "green" : 0.8941176470588236,
+          "red" : 0.9372549019607843
+        },
+        "imageTreatment" : {
+          "original" : {
+
+          }
+        },
+        "ink" : {
+          "blue" : 0.19215686274509805,
+          "green" : 0.22745098039215686,
+          "red" : 0.09411764705882353
+        },
+        "paper" : {
+          "blue" : 0.9098039215686274,
+          "green" : 0.9529411764705882,
+          "red" : 0.9725490196078431
+        },
+        "secondary" : {
+          "blue" : 0.4235294117647059,
+          "green" : 0.4588235294117647,
+          "red" : 0.39215686274509803
+        },
+        "texture" : {
+          "assetName" : "WarmPaper",
+          "contentMode" : "fill",
+          "fallback" : "solidPaper",
+          "opacity" : 0.34
+        }
+      },
+      "textLayouts" : [
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000821",
+          "measurement" : {
+            "availableHeight" : 48.42,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 42,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    154.69
+                  ],
+                  [
+                    273.24171875,
+                    19.877812499999997
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                273.24171875,
+                19.877812499999997
+              ]
+            ],
+            "requiredHeight" : 19.877812499999997,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 42
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 14.559999999999999,
+            "kern" : 0,
+            "lineHeight" : 19.877812499999997,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                154.69
+              ],
+              [
+                470.4,
+                48.42
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Tailor never changes your original photos."
+        },
+        {
+          "elementID" : "00000000-0000-0000-0000-000000000820",
+          "field" : "closingMessage",
+          "measurement" : {
+            "availableHeight" : 80.7,
+            "availableLines" : 2,
+            "consumedUTF16Length" : 15,
+            "lineBoxes" : [
+              {
+                "rect" : [
+                  [
+                    62.300000000000004,
+                    82.06
+                  ],
+                  [
+                    170.28457031249997,
+                    34.40390625
+                  ]
+                ]
+              }
+            ],
+            "occupiedRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                170.28457031249997,
+                34.40390625
+              ]
+            ],
+            "requiredHeight" : 34.40390625,
+            "requiredLines" : 1,
+            "totalUTF16Length" : 15
+          },
+          "spec" : {
+            "alignment" : "leading",
+            "editableRect" : [
+              [
+                56.7,
+                73.99000000000001
+              ],
+              [
+                481.6,
+                655.8489
+              ]
+            ],
+            "fallbackPostScriptName" : "HelveticaNeue",
+            "fontPostScriptName" : "IowanOldStyle-Roman",
+            "fontSize" : 25.2,
+            "kern" : 0,
+            "lineHeight" : 34.40390625,
+            "paragraphSpacing" : 0,
+            "protectedRects" : [
+              [
+                [
+                  56.7,
+                  729.8389
+                ],
+                [
+                  481.6,
+                  38.1711
+                ]
+              ]
+            ],
+            "textRect" : [
+              [
+                62.300000000000004,
+                82.06
+              ],
+              [
+                470.4,
+                80.7
+              ]
+            ],
+            "writingDirection" : "leftToRight"
+          },
+          "style" : "standard",
+          "value" : "Kept with care."
+        }
+      ]
+    }
+  ],
+  "watermarked" : false
+}

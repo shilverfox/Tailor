@@ -38,9 +38,14 @@ extension PetScanServicing {
 }
 
 protocol PurchaseServicing: Sendable {
+    func unlockDisplayPrice() async -> String?
     func purchaseUnlock() async throws -> PurchaseState
     func restorePurchases() async throws -> PurchaseState
     func isEntitled() async -> Bool
+}
+
+extension PurchaseServicing {
+    func unlockDisplayPrice() async -> String? { nil }
 }
 
 protocol PDFExporting: Sendable {

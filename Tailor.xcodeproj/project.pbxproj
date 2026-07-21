@@ -28,6 +28,8 @@
 		A00000000000000000000050 /* PhotoKitVisionScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000051 /* PhotoKitVisionScanner.swift */; };
 		A00000000000000000000052 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000053 /* LaunchScreen.storyboard */; };
 		B00000000000000000000001 /* TailorFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* TailorFeatureTests.swift */; };
+		B00000000000000000000021 /* TailorV22DataContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000022 /* TailorV22DataContractTests.swift */; };
+		B00000000000000000000023 /* TailorV22MainFlowTransactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000024 /* TailorV22MainFlowTransactionTests.swift */; };
 		C00000000000000000000001 /* TailorOnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000002 /* TailorOnboardingUITests.swift */; };
 		D00000000000000000000002 /* Tailor.storekit in Resources */ = {isa = PBXBuildFile; fileRef = D00000000000000000000001 /* Tailor.storekit */; };
 /* End PBXBuildFile section */
@@ -72,6 +74,8 @@
 		A00000000000000000000051 /* PhotoKitVisionScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoKitVisionScanner.swift; sourceTree = "<group>"; };
 		A00000000000000000000053 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		B00000000000000000000002 /* TailorFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorFeatureTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000022 /* TailorV22DataContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorV22DataContractTests.swift; sourceTree = "<group>"; };
+		B00000000000000000000024 /* TailorV22MainFlowTransactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorV22MainFlowTransactionTests.swift; sourceTree = "<group>"; };
 		B00000000000000000000003 /* TailorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C00000000000000000000002 /* TailorOnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailorOnboardingUITests.swift; sourceTree = "<group>"; };
 		C00000000000000000000003 /* TailorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TailorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -195,6 +199,8 @@
 			isa = PBXGroup;
 			children = (
 				B00000000000000000000002 /* TailorFeatureTests.swift */,
+				B00000000000000000000022 /* TailorV22DataContractTests.swift */,
+				B00000000000000000000024 /* TailorV22MainFlowTransactionTests.swift */,
 			);
 			path = TailorTests;
 			sourceTree = "<group>";
@@ -354,6 +360,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B00000000000000000000001 /* TailorFeatureTests.swift in Sources */,
+				B00000000000000000000021 /* TailorV22DataContractTests.swift in Sources */,
+				B00000000000000000000023 /* TailorV22MainFlowTransactionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -427,7 +435,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -450,7 +458,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -466,7 +474,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tailor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tailor";
@@ -481,7 +489,7 @@
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tailor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tailor";
@@ -495,7 +503,7 @@
 				DEVELOPMENT_TEAM = 926LNM5DUS;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_TARGET_NAME = Tailor;
@@ -509,7 +517,7 @@
 				DEVELOPMENT_TEAM = 926LNM5DUS;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.tailor.prototype.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shilverfox.tailor.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_TARGET_NAME = Tailor;

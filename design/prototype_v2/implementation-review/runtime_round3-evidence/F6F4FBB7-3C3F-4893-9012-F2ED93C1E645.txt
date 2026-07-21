@@ -1,0 +1,4 @@
+Query chain:
+ →Find: Target Application 'com.tailor.prototype'
+  ↪︎Find: Descendants matching type Button
+    ↪︎Find: Elements matching predicate '"Confirm ignore Book Check suggestion" IN identifiers'

@@ -35,17 +35,17 @@ final class TailorFeatureTests: XCTestCase {
     }
 
     func testLowConfidenceCandidateStartsNeedsReviewAndIsNotSelected() {
-        let candidate = ArchivePhoto(id: UUID(), assetLocalIdentifier: "low-confidence", decision: .needsReview, confidence: 0.43, createdAt: nil)
-        XCTAssertEqual(candidate.decision, .needsReview)
+        let candidate = ArchivePhoto(id: UUID(), assetLocalIdentifier: "low-confidence", decision: .pending, confidence: 0.43, createdAt: nil)
+        XCTAssertEqual(candidate.decision, .pending)
         XCTAssertNotEqual(candidate.decision, .selected)
     }
 
     func testOnlyExplicitlySelectedNormalPhotosAreEligibleForAnArchive() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let normal = ArchivePhoto(id: UUID(), assetLocalIdentifier: "normal", decision: .selected, confidence: 0.96, createdAt: date)
-        let review = ArchivePhoto(id: UUID(), assetLocalIdentifier: "review", decision: .needsReview, confidence: 0.96, createdAt: date)
-        let sensitive = ArchivePhoto(id: UUID(), assetLocalIdentifier: "sensitive", decision: .selected, confidence: 0.96, createdAt: date, sensitivityState: .needsSensitiveReview)
-        let deferred = ArchivePhoto(id: UUID(), assetLocalIdentifier: "deferred", decision: .selected, confidence: 0.96, createdAt: date, sensitivityState: .hiddenUntilUserDecides)
+        let review = ArchivePhoto(id: UUID(), assetLocalIdentifier: "review", decision: .pending, confidence: 0.96, createdAt: date)
+        let sensitive = ArchivePhoto(id: UUID(), assetLocalIdentifier: "sensitive", decision: .selected, confidence: 0.96, createdAt: date, sensitivityState: .sensitive)
+        let deferred = ArchivePhoto(id: UUID(), assetLocalIdentifier: "deferred", decision: .selected, confidence: 0.96, createdAt: date, sensitivityState: .sensitive)
         let neverUse = ArchivePhoto(id: UUID(), assetLocalIdentifier: "never", decision: .selected, confidence: 0.96, createdAt: date, sensitivityState: .neverUse, excludedReason: .neverUse)
 
         XCTAssertTrue(normal.isEligibleForArchive)
@@ -240,7 +240,7 @@ final class TailorFeatureTests: XCTestCase {
         let modelContainer = try ModelContainer(for: StoredPetProfile.self, configurations: configuration)
         let repository = SwiftDataArchiveRepository(modelContainer: modelContainer)
         let profile = makeProfile(lifecycle: .ready)
-        let photo = ArchivePhoto(id: UUID(), assetLocalIdentifier: "asset-77", decision: .needsReview, confidence: 0.62, createdAt: .now)
+        let photo = ArchivePhoto(id: UUID(), assetLocalIdentifier: "asset-77", decision: .pending, confidence: 0.62, createdAt: .now)
         var document = ArchiveDocument(profile: profile, photos: [photo], chapters: [])
         try await repository.save(document: document)
         document.photos[0].decision = .selected
@@ -256,7 +256,7 @@ final class TailorFeatureTests: XCTestCase {
         let modelContainer = try ModelContainer(for: StoredPetProfile.self, configurations: configuration)
         let repository = SwiftDataArchiveRepository(modelContainer: modelContainer)
         let profile = makeProfile(lifecycle: .scanning)
-        let candidate = ArchivePhoto(id: UUID(), assetLocalIdentifier: "asset-resume", decision: .needsReview, confidence: 0.64, createdAt: .now)
+        let candidate = ArchivePhoto(id: UUID(), assetLocalIdentifier: "asset-resume", decision: .pending, confidence: 0.64, createdAt: .now)
         let checkpoint = ScanCheckpoint(nextAssetIndex: 24, totalAssets: 100, candidates: [candidate])
         let document = ArchiveDocument(profile: profile, photos: [candidate], chapters: [], scanCheckpoint: checkpoint)
 
@@ -353,12 +353,33 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertEqual(high.agreeingReferenceCount, 2)
 
         let weakSingleReference = policy.assess(animalConfidence: 0.96, referenceSimilarities: [0.90, 0.20, 0.18])
-        XCTAssertEqual(weakSingleReference.disposition, .needsReview)
+        XCTAssertEqual(weakSingleReference.disposition, .pending)
 
         let wrongSpecies = policy.assess(animalConfidence: 0.25, referenceSimilarities: [0.95, 0.90, 0.87])
         XCTAssertEqual(wrongSpecies.disposition, .rejectedSpecies)
         let weakIdentity = policy.assess(animalConfidence: 0.95, referenceSimilarities: [0.40, 0.31, 0.20])
         XCTAssertEqual(weakIdentity.disposition, .rejectedIdentity)
+    }
+
+    func testRecognitionPolicyKeepsAnimalDetectorFalsePositiveReviewableWithoutGenericSpeciesAgreement() {
+        let policy = PetRecognitionPolicy.standard
+        // A real-device probe of a macaque tile returned Dog=0.648 from
+        // VNRecognizeAnimalsRequest but generic dog=0.045 from
+        // VNClassifyImageRequest. It must not enter review on a weak
+        // single-model animal label.
+        let macaque = policy.assess(
+            animalConfidence: 0.648,
+            genericSpeciesConfidence: 0.045,
+            referenceSimilarities: [0.92, 0.80, 0.25]
+        )
+        XCTAssertEqual(macaque.disposition, .pending)
+
+        let dog = policy.assess(
+            animalConfidence: 0.713,
+            genericSpeciesConfidence: 0.909,
+            referenceSimilarities: [0.92, 0.80, 0.25]
+        )
+        XCTAssertEqual(dog.disposition, .autoSelected)
     }
 
     func testRecognitionEvaluationReportsPrecisionRecallAndHighConfidenceFalsePositives() {
@@ -378,7 +399,7 @@ final class TailorFeatureTests: XCTestCase {
 
     func testVisualDuplicatePolicyGroupsUndecidedFramesAndPreservesHistoricalDecisions() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
-        let undecided = ArchivePhoto(id: UUID(), assetLocalIdentifier: "burst-1", decision: .needsReview, confidence: 0.7, createdAt: date, visualHash: 0b1010)
+        let undecided = ArchivePhoto(id: UUID(), assetLocalIdentifier: "burst-1", decision: .pending, confidence: 0.7, createdAt: date, visualHash: 0b1010)
         XCTAssertEqual(
             VisualDuplicatePolicy.classify(hash: 0b1011, createdAt: date.addingTimeInterval(2), against: [undecided]),
             .grouped(anchorIdentifier: "burst-1", kind: .burst)
@@ -418,7 +439,7 @@ final class TailorFeatureTests: XCTestCase {
         let record = MemoryBookExportRecord(fileName: "archive.pdf", pageCount: 2, pageSize: .letter, watermarked: false)
         let document = ArchiveDocument(profile: profile, photos: [original], chapters: [chapter], memoryBook: book, exportRecords: [record])
         let rescanned = ArchivePhoto(id: UUID(), assetLocalIdentifier: "existing", decision: .selected, confidence: 0.99, createdAt: .now, visualHash: 12)
-        let fresh = ArchivePhoto(id: UUID(), assetLocalIdentifier: "new", decision: .needsReview, confidence: 0.65, createdAt: .now)
+        let fresh = ArchivePhoto(id: UUID(), assetLocalIdentifier: "new", decision: .pending, confidence: 0.65, createdAt: .now)
 
         let completed = ScanArchiveMergePolicy.completing(document: document, profile: profile, scanned: [rescanned, fresh])
         let retained = try XCTUnwrap(completed.photos.first(where: { $0.assetLocalIdentifier == "existing" }))
@@ -464,7 +485,7 @@ final class TailorFeatureTests: XCTestCase {
     func testMemoryBookBuilderUsesEligiblePhotosAndCreatesChapterPages() {
         let profile = makeProfile(lifecycle: .ready)
         let selected = ArchivePhoto(id: UUID(), assetLocalIdentifier: "selected", decision: .selected, confidence: 0.95, createdAt: .now)
-        let pending = ArchivePhoto(id: UUID(), assetLocalIdentifier: "pending", decision: .needsReview, confidence: 0.62, createdAt: .now)
+        let pending = ArchivePhoto(id: UUID(), assetLocalIdentifier: "pending", decision: .pending, confidence: 0.62, createdAt: .now)
         let chapter = Chapter(id: UUID(), title: "Days together", dateLabel: "2020–2024", photoIDs: [selected.id, pending.id], isHidden: false, sortOrder: 0)
 
         let book = MemoryBookBuilder.build(profile: profile, photos: [selected, pending], chapters: [chapter], style: .warmPaper, pageSize: .a4)
@@ -559,23 +580,28 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertTrue(book.pages[pageIndex].elements.contains(where: { $0.id == lockedID }))
     }
 
-    func testProductionBuilderUsesBalancedTwoByTwoLayoutForFourPhotos() throws {
+    func testWarmPaperProductionBuilderUsesSingleAndDiptychPhotoPages() throws {
         let profile = makeProfile(lifecycle: .ready)
         let photos = (0..<4).map { index in
-            ArchivePhoto(id: UUID(), assetLocalIdentifier: "balanced-\(index)", decision: .selected, confidence: 1, createdAt: .now)
+            ArchivePhoto(
+                id: UUID(),
+                assetLocalIdentifier: "balanced-\(index)",
+                decision: .selected,
+                confidence: 1,
+                createdAt: .now,
+                subjectRegion: CGRect(x: 0.30, y: 0.30, width: 0.30, height: 0.30)
+            )
         }
         let chapter = Chapter(id: UUID(), title: "Days", dateLabel: "2024", photoIDs: photos.map(\.id), isHidden: false, sortOrder: 0)
 
         let book = MemoryBookBuilder.build(profile: profile, photos: photos, chapters: [chapter], style: .warmPaper, pageSize: .letter)
-        let page = try XCTUnwrap(book.pages.first(where: { $0.kind == .photoSelection }))
-        let frames = page.elements.filter { $0.kind == .image }.map(\.normalizedFrame)
+        let pages = book.pages.filter { $0.kind == .photoSelection }
 
-        XCTAssertEqual(page.layout, .grid2x2)
-        XCTAssertEqual(frames.count, 4)
-        XCTAssertEqual(Set(frames.map(\.minX)).count, 2)
-        XCTAssertEqual(Set(frames.map(\.minY)).count, 2)
-        XCTAssertEqual(frames.filter { $0.minY == frames.map(\.minY).min() }.count, 2)
-        XCTAssertEqual(frames.filter { $0.minY == frames.map(\.minY).max() }.count, 2)
+        XCTAssertEqual(pages.map(\.layout), [.diptych, .diptych])
+        XCTAssertEqual(pages.map { $0.photoIDs.count }, [2, 2])
+        XCTAssertTrue(pages.flatMap(\.elements).filter { $0.kind == .image }.allSatisfy {
+            $0.imageContentMode == .fit && $0.rotationDegrees == 0 && $0.cropOffset == .zero
+        }, "Warm Paper photo pages default to full-image diptychs; Fill/Crop remains an explicit editing choice.")
     }
 
     func testDuplicateEditablePageCreatesFreshElementIdentifiersAndRenumbers() throws {
@@ -961,6 +987,133 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertTrue(second.manifest.plans.flatMap(\.orderedElements).contains { $0.text == "A later edit" })
     }
 
+    func testVisualQAFixtureUsesOneSerializedRevisionAndCoversHardRenderGeometry() throws {
+        let bytes = MemoryBookVisualQAFixture.serializedData(style: .warmPaper, paper: .letter)
+        let readerDocument = try JSONDecoder().decode(MemoryBookDocument.self, from: bytes)
+        let pdfDocument = try JSONDecoder().decode(MemoryBookDocument.self, from: bytes)
+
+        XCTAssertEqual(readerDocument, pdfDocument)
+        XCTAssertEqual(readerDocument.exportSnapshot().fingerprint, pdfDocument.exportSnapshot().fingerprint)
+        XCTAssertEqual(readerDocument.renderManifest(), pdfDocument.renderManifest())
+        XCTAssertEqual(bytes, MemoryBookVisualQAFixture.serializedData(style: .warmPaper, paper: .letter))
+
+        let elements = readerDocument.pages.flatMap(\.elements)
+        XCTAssertTrue(elements.contains(where: { abs($0.rotationDegrees) > 0 }))
+        XCTAssertTrue(elements.contains(where: { abs($0.textFontScale - 1) > 0.001 }))
+        XCTAssertTrue(elements.contains(where: { $0.imageContentMode == .fit }))
+        XCTAssertTrue(elements.contains(where: { $0.imageContentMode == .fill }))
+        XCTAssertTrue(elements.compactMap(\.text).contains(where: { $0.contains("مرحبا") && $0.contains("👨‍👩‍👧‍👦") && $0.contains("e\u{301}") }))
+
+        let photoPage = try XCTUnwrap(readerDocument.pages.first(where: { $0.kind == .photoSelection }))
+        let images = photoPage.elements.filter { $0.kind == .image }
+        XCTAssertTrue(images.enumerated().contains { index, lhs in
+            images.dropFirst(index + 1).contains { rhs in
+                lhs.normalizedFrame.intersects(rhs.normalizedFrame) && lhs.zIndex != rhs.zIndex
+            }
+        })
+    }
+
+    func testProductionDefaultFixtureUsesBuilderDefaultsForWarmPaperBaseline() throws {
+        func assertFrame(_ actual: CGRect, _ expected: CGRect, file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertEqual(actual.origin.x, expected.origin.x, accuracy: 0.0001, file: file, line: line)
+            XCTAssertEqual(actual.origin.y, expected.origin.y, accuracy: 0.0001, file: file, line: line)
+            XCTAssertEqual(actual.width, expected.width, accuracy: 0.0001, file: file, line: line)
+            XCTAssertEqual(actual.height, expected.height, accuracy: 0.0001, file: file, line: line)
+        }
+
+        let expectedKinds: [MemoryBookPageKind] = [.cover, .dedication, .contents, .chapterOpener, .photoSelection, .milestone, .closing]
+        let expectedTitles = ["Milo", "For Milo", "Contents", "Days together", "Days together", "A year we remember", "Kept with care."]
+        let expectedSubtitles = [
+            "A life in moments",
+            "Made privately from the photographs you chose.",
+            "2019-2021",
+            "2019-2021 · A season together",
+            "Selected moments from 2019-2021.",
+            "A quiet marker from 2017.",
+            "Tailor never changes your original photos."
+        ]
+        let expectedImageIdentifiers: [[String]] = [
+            ["fixture-photo-1"],
+            [],
+            [],
+            ["fixture-photo-1"],
+            ["fixture-photo-1", "fixture-photo-2"],
+            ["fixture-photo-1"],
+            []
+        ]
+
+        for paper in [PDFPageSize.letter, .a4] {
+            let bytes = MemoryBookProductionDefaultFixture.serializedData(paper: paper)
+            let readerDocument = try JSONDecoder().decode(MemoryBookDocument.self, from: bytes)
+            let pdfDocument = try JSONDecoder().decode(MemoryBookDocument.self, from: bytes)
+
+            XCTAssertEqual(readerDocument, pdfDocument)
+            XCTAssertEqual(readerDocument.exportSnapshot().fingerprint, pdfDocument.exportSnapshot().fingerprint)
+            XCTAssertEqual(bytes, MemoryBookProductionDefaultFixture.serializedData(paper: paper))
+            XCTAssertEqual(readerDocument.style, .warmPaper)
+            XCTAssertEqual(readerDocument.pageSize, paper)
+            XCTAssertEqual(readerDocument.pages.map(\.kind), expectedKinds)
+            XCTAssertEqual(readerDocument.pages.map(\.title), expectedTitles)
+            XCTAssertEqual(readerDocument.pages.map(\.subtitle), expectedSubtitles)
+
+            let style = MemoryBookPageStyle.resolve(.warmPaper)
+            XCTAssertEqual(style.paper, MemoryBookRGB(red: 248 / 255, green: 243 / 255, blue: 232 / 255))
+            XCTAssertEqual(style.backdrop, MemoryBookRGB(red: 239 / 255, green: 228 / 255, blue: 209 / 255))
+            XCTAssertEqual(style.ink, MemoryBookRGB(red: 24 / 255, green: 58 / 255, blue: 49 / 255))
+            XCTAssertEqual(style.secondary, MemoryBookRGB(red: 100 / 255, green: 117 / 255, blue: 108 / 255))
+            XCTAssertEqual(style.accent, MemoryBookRGB(red: 184 / 255, green: 86 / 255, blue: 57 / 255))
+            XCTAssertEqual(style.texture, .editorial("WarmPaper"))
+            XCTAssertEqual(style.filmFrame, nil)
+
+            let manifest = readerDocument.renderManifest()
+            XCTAssertEqual(manifest.plans.count, 7)
+            for (index, plan) in manifest.plans.enumerated() {
+                XCTAssertEqual(plan.style, style)
+                let expectedPageSize = MemoryBookPageRenderPlan.points(for: paper)
+                XCTAssertEqual(plan.pageSize, expectedPageSize)
+                XCTAssertEqual(plan.canonicalPageSize, expectedPageSize)
+                let expectedInset = expectedPageSize.width * MemoryBookPageRenderPlan.paperInsetRatio
+                assertFrame(plan.paperRect, CGRect(x: expectedInset, y: expectedInset, width: expectedPageSize.width - expectedInset * 2, height: expectedPageSize.height - expectedInset * 2))
+
+                let page = readerDocument.pages[index]
+                let textElements = plan.orderedElements.filter { $0.kind == .text }
+                let titleElement = try XCTUnwrap(textElements.first(where: { $0.text == expectedTitles[index] }))
+                XCTAssertEqual(plan.fontToken(for: titleElement), .display)
+                XCTAssertEqual(plan.fontSize(for: titleElement, in: .zero), plan.paperRect.width * 0.045, accuracy: 0.0001)
+                assertFrame(titleElement.normalizedFrame, CGRect(x: 0.08, y: 0.08, width: 0.84, height: 0.10))
+                if expectedSubtitles[index].isEmpty {
+                    XCTAssertEqual(textElements.count, 1)
+                } else {
+                    let subtitleElement = try XCTUnwrap(textElements.first(where: { $0.text == expectedSubtitles[index] }))
+                    XCTAssertEqual(plan.fontToken(for: subtitleElement), .body)
+                    XCTAssertEqual(plan.fontSize(for: subtitleElement, in: .zero), plan.paperRect.width * 0.026, accuracy: 0.0001)
+                    assertFrame(subtitleElement.normalizedFrame, CGRect(x: 0.08, y: 0.17, width: 0.84, height: 0.06))
+                }
+
+                let imageElements = plan.orderedElements.filter { $0.kind == .image }
+                let actualIdentifiers = imageElements.compactMap { element -> String? in
+                    element.assetID.flatMap { id in readerDocument.photos.first(where: { $0.id == id })?.assetLocalIdentifier }
+                }
+                XCTAssertEqual(actualIdentifiers, expectedImageIdentifiers[index])
+                XCTAssertTrue(imageElements.allSatisfy { $0.rotationDegrees == 0 && $0.cropOffset == .zero && $0.cropScale == 1 })
+                if [.cover, .chapterOpener, .milestone].contains(page.kind) {
+                    XCTAssertEqual(page.layout, .single)
+                    XCTAssertEqual(imageElements.map(\.imageContentMode), imageElements.isEmpty ? [] : [.fill])
+                    if !imageElements.isEmpty {
+                        assertFrame(imageElements[0].normalizedFrame, CGRect(x: 0.08, y: 0.27, width: 0.84, height: 0.40))
+                    }
+                } else if page.kind == .photoSelection {
+                    XCTAssertEqual(page.layout, .diptych)
+                    XCTAssertEqual(imageElements.map(\.imageContentMode), [.fit, .fit])
+                    assertFrame(imageElements[0].normalizedFrame, CGRect(x: 0.08, y: 0.3546875, width: 0.41, height: 0.230625))
+                    assertFrame(imageElements[1].normalizedFrame, CGRect(x: 0.6025, y: 0.27, width: 0.225, height: 0.40))
+                } else {
+                    XCTAssertTrue(imageElements.isEmpty)
+                }
+            }
+        }
+    }
+
     func testTextLimitAndDraftMeasurementUseCurrentTextStyleAndPageKind() throws {
         let profile = makeProfile(lifecycle: .ready)
         let photo = ArchivePhoto(id: UUID(), assetLocalIdentifier: "asset", decision: .selected, confidence: 1, createdAt: .now)
@@ -1279,10 +1432,10 @@ final class TailorFeatureTests: XCTestCase {
             ArchivePhoto(id: UUID(), assetLocalIdentifier: "companion-\($0)", decision: .selected, confidence: 1, createdAt: .now, pixelSize: CGSize(width: 1_600, height: 900))
         }
         let mosaicChapter = Chapter(id: UUID(), title: "Focus", dateLabel: "2024", photoIDs: [landscape.id] + companions.map(\.id), isHidden: false, sortOrder: 0)
-        let mosaicBook = MemoryBookBuilder.build(profile: makeProfile(lifecycle: .ready), photos: [landscape] + companions, chapters: [mosaicChapter], style: .warmPaper, pageSize: .letter)
+        let mosaicBook = MemoryBookBuilder.build(profile: makeProfile(lifecycle: .ready), photos: [landscape] + companions, chapters: [mosaicChapter], style: .fieldNotes, pageSize: .letter)
         let mosaicPage = try XCTUnwrap(mosaicBook.pages.first(where: { $0.kind == .photoSelection }))
         let focalElement = try XCTUnwrap(mosaicPage.elements.first(where: { $0.assetID == landscape.id }))
-        XCTAssertLessThan(focalElement.cropOffset.width, -0.05, "The production builder must carry focal metadata into a three-photo page")
+        XCTAssertLessThan(focalElement.cropOffset.width, -0.05, "Templates that opt into editorial fill must carry focal metadata into a three-photo page")
         XCTAssertEqual(focalElement.cropScale, 1, accuracy: 0.0001)
     }
 
@@ -1547,7 +1700,7 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertFalse(issues.contains(where: { $0.elementID == highElement.id && $0.message.contains("PPI") }))
     }
 
-    func testBookCheckRequiresReviewForSevereAutomaticCropWithoutFocalMetadata() throws {
+    func testBookCheckSuggestsReviewForSevereAutomaticCropWithoutFocalMetadata() throws {
         let profile = makeProfile(lifecycle: .ready)
         let portrait = ArchivePhoto(
             id: UUID(),
@@ -1580,7 +1733,7 @@ final class TailorFeatureTests: XCTestCase {
         )
 
         let issue = try XCTUnwrap(book.checkBook().first(where: { $0.elementID == element.id && $0.message.contains("confirm the framing") }))
-        XCTAssertEqual(issue.severity, .blocking)
+        XCTAssertEqual(issue.severity, .suggestion)
 
         XCTAssertTrue(book.applyCrop(pageID: page.id, elementID: element.id, scale: 1, offset: .zero))
         XCTAssertFalse(book.checkBook().contains(where: { $0.elementID == element.id && $0.message.contains("confirm the framing") }))
@@ -1651,7 +1804,7 @@ final class TailorFeatureTests: XCTestCase {
         let photos = try await DemoPetScanService().scan(profile: profile)
 
         XCTAssertEqual(photos.filter { $0.decision == .selected }.count, 1)
-        XCTAssertEqual(photos.filter { $0.decision == .needsReview }.count, 2)
+        XCTAssertEqual(photos.filter { $0.decision == .pending }.count, 2)
         XCTAssertFalse(photos.dropFirst().contains { $0.decision == .selected })
     }
 
@@ -1752,35 +1905,38 @@ final class TailorFeatureTests: XCTestCase {
         let book = p02TextFixtureBook(style: .warmPaper, paper: .letter)
         let photoPage = try XCTUnwrap(book.pages.first(where: { $0.kind == .photoSelection }))
         let dedicationPage = try XCTUnwrap(book.pages.first(where: { $0.kind == .dedication }))
-        let grapheme = "n" // one complete visible Swift Character, never a UTF-16 fragment
-        let caption120 = String(repeating: grapheme, count: 119) + "\n"
-        let dedication240 = String(repeating: grapheme, count: 239) + "\n"
-        // Fixed paper-normalized frames and the current TextLayoutSpec body
-        // token. The final newline is a real Core Text line boundary: at this
-        // width 120/240 visible Characters consume exactly 12/24 line boxes;
-        // appending one whole grapheme requires the 13th/25th box.
+        let grapheme = "👨‍👩‍👧‍👦" // one Swift Character spanning multiple UTF-16 code units
         let captionFrame = CGRect(x: 0.10, y: 0.52, width: 0.145, height: 0.310)
         let dedicationFrame = CGRect(x: 0.10, y: 0.24, width: 0.145, height: 0.600)
 
-        let captionFit = book.textLayout(text: caption120, style: .standard, normalizedFrame: captionFrame, on: photoPage, zIndex: 9, field: .photoCaption)
-        let captionPlusOne = book.textLayout(text: caption120 + grapheme, style: .standard, normalizedFrame: captionFrame, on: photoPage, zIndex: 9, field: .photoCaption)
-        let dedicationFit = book.textLayout(text: dedication240, style: .standard, normalizedFrame: dedicationFrame, on: dedicationPage, zIndex: 9, field: .dedicationMessage)
-        let dedicationPlusOne = book.textLayout(text: dedication240 + grapheme, style: .standard, normalizedFrame: dedicationFrame, on: dedicationPage, zIndex: 9, field: .dedicationMessage)
+        func boundary(on page: MemoryBookPage, field: MemoryBookTextField, frame: CGRect) throws -> (fit: MemoryBookTextLayoutSnapshot, overflow: MemoryBookTextLayoutSnapshot) {
+            var previous = book.textLayout(text: "", style: .standard, normalizedFrame: frame, on: page, zIndex: 9, field: field)
+            for count in 1...500 {
+                let next = book.textLayout(text: String(repeating: grapheme, count: count), style: .standard, normalizedFrame: frame, on: page, zIndex: 9, field: field)
+                if next.measurement.overflows { return (previous, next) }
+                previous = next
+            }
+            XCTFail("Expected to find a real Core Text frame boundary")
+            throw NSError(domain: "TailorTests", code: 1)
+        }
 
-        XCTAssertEqual(caption120.count, 120)
-        XCTAssertEqual((caption120 + grapheme).count, 121)
-        XCTAssertEqual(dedication240.count, 240)
-        XCTAssertEqual((dedication240 + grapheme).count, 241)
-        XCTAssertTrue(captionFit.spec.editableRect.contains(captionFit.spec.textRect))
-        XCTAssertTrue(dedicationFit.spec.editableRect.contains(dedicationFit.spec.textRect))
-        XCTAssertEqual(captionFit.measurement.availableLines, captionFit.measurement.requiredLines)
-        XCTAssertEqual(dedicationFit.measurement.availableLines, dedicationFit.measurement.requiredLines)
-        XCTAssertFalse(captionFit.measurement.overflows)
-        XCTAssertTrue(captionPlusOne.measurement.overflows)
-        XCTAssertFalse(dedicationFit.measurement.overflows)
-        XCTAssertTrue(dedicationPlusOne.measurement.overflows)
-        XCTAssertEqual(captionPlusOne.measurement.requiredLines, captionFit.measurement.requiredLines + 1, "caption fit=\(captionFit.measurement.requiredLines), plusOne=\(captionPlusOne.measurement.requiredLines)")
-        XCTAssertEqual(dedicationPlusOne.measurement.requiredLines, dedicationFit.measurement.requiredLines + 1, "dedication fit=\(dedicationFit.measurement.requiredLines), plusOne=\(dedicationPlusOne.measurement.requiredLines)")
+        let caption = try boundary(on: photoPage, field: .photoCaption, frame: captionFrame)
+        let dedication = try boundary(on: dedicationPage, field: .dedicationMessage, frame: dedicationFrame)
+
+        XCTAssertTrue(caption.fit.spec.editableRect.contains(caption.fit.spec.textRect))
+        XCTAssertTrue(dedication.fit.spec.editableRect.contains(dedication.fit.spec.textRect))
+        for pair in [caption, dedication] {
+            XCTAssertFalse(pair.fit.measurement.overflows)
+            XCTAssertTrue(pair.overflow.measurement.overflows)
+            XCTAssertEqual(pair.fit.measurement.consumedUTF16Length, pair.fit.measurement.totalUTF16Length)
+            let consumed = try XCTUnwrap(pair.overflow.measurement.consumedUTF16Length)
+            let total = try XCTUnwrap(pair.overflow.measurement.totalUTF16Length)
+            XCTAssertLessThan(consumed, total)
+            if consumed > 0 {
+                let composed = (pair.overflow.value as NSString).rangeOfComposedCharacterSequences(for: NSRange(location: 0, length: consumed))
+                XCTAssertEqual(composed.length, consumed, "Core Text consumption must stop on a complete grapheme boundary")
+            }
+        }
     }
 
     func testTextRenderContractUsesExplicitUIKitAndCoreTextResolvableFonts() throws {
@@ -1888,6 +2044,22 @@ final class TailorFeatureTests: XCTestCase {
         let rtl = try XCTUnwrap(manifest.plans.flatMap(\.textLayouts).first(where: { $0.field == .chapterNote }))
         XCTAssertEqual(MemoryBookPreviewTextAdapter.contract(for: rtl).spec.writingDirection, .rightToLeft)
         XCTAssertEqual(MemoryBookPDFTextAdapter.contract(for: rtl).spec.writingDirection, .rightToLeft)
+    }
+
+    func testSharedCoreTextRendererDrawsMixedDirectionTextInAuthoredCoordinates() throws {
+        let book = MemoryBookVisualQAFixture.make(style: .warmPaper, paper: .letter)
+        let snapshot = try XCTUnwrap(book.renderPlans().flatMap(\.textLayouts).first(where: { $0.value.contains("مرحبا") }))
+        let size = snapshot.spec.textRect.size
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { renderer in
+            MemoryBookTextRenderer.draw(snapshot: snapshot, color: .black, in: CGRect(origin: .zero, size: size), context: renderer.cgContext)
+        }
+        let cgImage = try XCTUnwrap(image.cgImage)
+        let bytes = try XCTUnwrap(cgImage.dataProvider?.data) as Data
+        XCTAssertTrue(bytes.contains(where: { $0 != 0 }), "The shared CoreText path must paint glyph pixels")
+        XCTAssertEqual(MemoryBookPreviewTextAdapter.contract(for: snapshot), MemoryBookPDFTextAdapter.contract(for: snapshot))
     }
 
     /// Produces a reproducible PDF evidence set without touching the developer's
@@ -2223,6 +2395,58 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertEqual(a4.spec.paragraphSpacing / a4.spec.fontSize, letter.spec.paragraphSpacing / letter.spec.fontSize, accuracy: 0.0001)
     }
 
+    func testTextTypographyScalesFromCanonicalPaperInsteadOfReapplyingPrintFloor() throws {
+        for paper in PDFPageSize.allCases {
+            let element = MemoryBookElement(
+                kind: .text,
+                text: "A quiet memory across every canvas.",
+                normalizedFrame: CGRect(x: 0.12, y: 0.20, width: 0.70, height: 0.18),
+                zIndex: 1,
+                textStyle: .small,
+                textFontScale: 0.5,
+                textField: .dedicationMessage
+            )
+            let page = MemoryBookPage(kind: .dedication, title: "Memory", pageNumber: 1, elements: [element])
+            let book = MemoryBookDocument(
+                profile: makeProfile(lifecycle: .ready),
+                photos: [],
+                chapters: [],
+                pages: [page],
+                style: .warmPaper,
+                pageSize: paper
+            )
+            let physicalSize = MemoryBookPageRenderPlan.points(for: paper)
+            let readerSize = CGSize(width: 258, height: 258 * physicalSize.height / physicalSize.width)
+            let physicalPlan = MemoryBookPageRenderPlan(page: page, document: book, pageSize: physicalSize)
+            let readerPlan = MemoryBookPageRenderPlan(page: page, document: book, pageSize: readerSize)
+            let physical = try XCTUnwrap(physicalPlan.textLayout(for: element))
+            let reader = try XCTUnwrap(readerPlan.textLayout(for: element))
+            let scale = readerPlan.paperRect.width / physicalPlan.paperRect.width
+
+            XCTAssertGreaterThanOrEqual(physical.spec.fontSize, MemoryBookTextReadabilityAssessment.minimumPrintPointSize)
+            XCTAssertEqual(reader.spec.fontSize, physical.spec.fontSize * scale, accuracy: 0.0001)
+            XCTAssertEqual(reader.spec.lineHeight, physical.spec.lineHeight * scale, accuracy: 0.0001)
+            XCTAssertEqual(reader.spec.kern, physical.spec.kern * scale, accuracy: 0.0001)
+            XCTAssertLessThan(reader.spec.fontSize, MemoryBookTextReadabilityAssessment.minimumPrintPointSize,
+                              "The Reader drawing size is a page scale, not a second print-size gate")
+            XCTAssertEqual(reader.measurement.consumedUTF16Length, physical.measurement.consumedUTF16Length)
+            XCTAssertEqual(reader.measurement.requiredLines, physical.measurement.requiredLines)
+            XCTAssertEqual(reader.measurement.occupiedRect.minX, physical.measurement.occupiedRect.minX * scale, accuracy: 0.02)
+            XCTAssertEqual(reader.measurement.occupiedRect.minY, physical.measurement.occupiedRect.minY * scale, accuracy: 0.02)
+            XCTAssertEqual(reader.measurement.occupiedRect.width, physical.measurement.occupiedRect.width * scale, accuracy: 0.02)
+            XCTAssertEqual(reader.measurement.occupiedRect.height, physical.measurement.occupiedRect.height * scale, accuracy: 0.02)
+
+            let canonicalized = reader.spec.scaled(by: readerPlan.canonicalTextRenderScale)
+            XCTAssertEqual(canonicalized.fontSize, physical.spec.fontSize, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.lineHeight, physical.spec.lineHeight, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.kern, physical.spec.kern, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.textRect.minX, physical.spec.textRect.minX, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.textRect.minY, physical.spec.textRect.minY, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.textRect.width, physical.spec.textRect.width, accuracy: 0.0001)
+            XCTAssertEqual(canonicalized.textRect.height, physical.spec.textRect.height, accuracy: 0.0001)
+        }
+    }
+
     func testTypographyMigrationDefaultsAndClampsUnsafeArchiveValues() throws {
         var legacy = MemoryBookElement(kind: .text, text: "Legacy", normalizedFrame: CGRect(x: 0.1, y: 0.1, width: 0.5, height: 0.1))
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(legacy)) as? [String: Any])
@@ -2443,6 +2667,211 @@ final class TailorFeatureTests: XCTestCase {
         XCTAssertEqual(book.pages[1].backgroundColor, customPaper)
         XCTAssertEqual(book.pages[2], before.pages[2])
     }
+
+    // MARK: - Tailor v2 product-contract baseline
+
+    func testV2VisualOnlyTemplateApplicationChangesTokensWithoutChangingAuthoredPages() {
+        let profile = makeProfile(lifecycle: .ready)
+        let photo = ArchivePhoto(
+            id: UUID(),
+            assetLocalIdentifier: "v2-visual-only",
+            decision: .selected,
+            confidence: 0.98,
+            createdAt: .now,
+            pixelSize: CGSize(width: 2400, height: 1600)
+        )
+        let authoredImage = MemoryBookElement(
+            kind: .image,
+            assetID: photo.id,
+            normalizedFrame: CGRect(x: 0.13, y: 0.21, width: 0.62, height: 0.41),
+            cropScale: 1.27,
+            cropOffset: CGSize(width: 0.04, height: -0.03),
+            rotationDegrees: 7.5,
+            zIndex: 12,
+            imageContentMode: .fill,
+            isLayoutLocked: true,
+            origin: .user
+        )
+        let page = MemoryBookPage(
+            kind: .photoSelection,
+            title: "Authored page",
+            photoIDs: [photo.id],
+            layout: .single,
+            pageNumber: 1,
+            elements: [authoredImage],
+            backgroundColor: MemoryBookRGB(red: 0.93, green: 0.89, blue: 0.80),
+            isLocked: true
+        )
+        var book = MemoryBookDocument(
+            profile: profile,
+            photos: [photo],
+            chapters: [],
+            pages: [page],
+            style: .warmPaper,
+            pageSize: .letter
+        )
+        let pagesBefore = book.pages
+
+        book.applyTemplate(style: .cinema, mode: .visualOnly)
+
+        XCTAssertEqual(book.style, .cinema)
+        XCTAssertEqual(book.pages, pagesBefore, "Visual style only must preserve pagination, frame, crop, rotation, z-index, locks and page overrides exactly")
+    }
+
+    func testV2RearrangeUnlockedProtectsLockedPageAndReportsItsImpact() {
+        let profile = makeProfile(lifecycle: .ready)
+        let photos = (0..<4).map { index in
+            ArchivePhoto(
+                id: UUID(),
+                assetLocalIdentifier: "v2-reflow-\(index)",
+                decision: .selected,
+                confidence: 0.95,
+                createdAt: Date(timeIntervalSince1970: TimeInterval(index + 1)),
+                pixelSize: CGSize(width: 1800, height: 1200)
+            )
+        }
+        let lockedElement = MemoryBookElement(
+            kind: .image,
+            assetID: photos[0].id,
+            normalizedFrame: CGRect(x: 0.18, y: 0.24, width: 0.55, height: 0.38),
+            rotationDegrees: -4,
+            zIndex: 9,
+            isLayoutLocked: true,
+            origin: .user
+        )
+        let lockedPage = MemoryBookPage(
+            kind: .photoSelection,
+            title: "Keep this page",
+            photoIDs: [photos[0].id],
+            layout: .single,
+            pageNumber: 1,
+            elements: [lockedElement],
+            isLocked: true
+        )
+        let automaticPage = MemoryBookPage(
+            kind: .photoSelection,
+            title: "Reflow this page",
+            photoIDs: Array(photos.dropFirst().map(\.id)),
+            layout: .grid2x2,
+            pageNumber: 2,
+            elements: MemoryBookBuilder.elements(
+                kind: .photoSelection,
+                title: "Reflow this page",
+                subtitle: "",
+                photos: Array(photos.dropFirst().map(\.id)),
+                layout: .grid2x2
+            )
+        )
+        var book = MemoryBookDocument(
+            profile: profile,
+            photos: photos,
+            chapters: [],
+            pages: [lockedPage, automaticPage],
+            style: .warmPaper,
+            pageSize: .a4
+        )
+        let lockedBefore = lockedPage
+        let summary = book.templateApplicationSummary(style: .cinema, mode: .rearrangeUnlocked)
+
+        XCTAssertEqual(summary.affectedPageCount, 1)
+        XCTAssertEqual(summary.protectedPageCount, 1)
+
+        book.applyTemplate(style: .cinema, mode: .rearrangeUnlocked)
+
+        XCTAssertEqual(book.style, .cinema)
+        XCTAssertEqual(book.pages.first(where: { $0.id == lockedBefore.id }), lockedBefore, "A locked page must be byte-for-byte stable under template rearrangement")
+        XCTAssertTrue(book.pages.filter { $0.id != lockedBefore.id }.allSatisfy { $0.layout == .single }, "Cinema must reflow only unlocked photo pages to its single-hero recipe")
+        XCTAssertEqual(Set(book.pages.flatMap(\.photoIDs)), Set(photos.map(\.id)), "Safe reflow must not lose or duplicate source photos")
+    }
+
+    func testV2FiveTemplatesExposeFiveDistinctEditorialSignatures() {
+        let signatures = AlbumStyle.allCases.map { style -> String in
+            let visual = MemoryBookPageStyle.resolve(style)
+            let layout = MemoryBookTemplatePolicy.layout(for: style, photoCount: 4, pageOrdinal: 1)
+            return [
+                String(describing: layout),
+                String(MemoryBookTemplatePolicy.capacity(for: style, pageOrdinal: 1)),
+                String(describing: visual.imageTreatment),
+                String(visual.paper.red), String(visual.paper.green), String(visual.paper.blue),
+                String(visual.backdrop.red), String(visual.backdrop.green), String(visual.backdrop.blue),
+                String(visual.drawsFilmFrame),
+                visual.texture?.assetName ?? "none"
+            ].joined(separator: "|")
+        }
+
+        XCTAssertEqual(signatures.count, 5)
+        XCTAssertEqual(Set(signatures).count, 5, "The five templates must remain structurally/visually distinguishable instead of becoming color aliases")
+    }
+
+    func testV2TextFontsExposeExactlyEightPersistedTokensAndMigrateLegacyTokens() throws {
+        XCTAssertEqual(MemoryBookTextFont.allCases.map(\.rawValue), ["system", "rounded", "systemSerif", "iowanOldStyle", "baskerville", "avenirNext", "americanTypewriter", "noteworthy"])
+        let legacy: [String: MemoryBookTextFont] = ["editorial": .systemSerif, "quietSans": .avenirNext, "handwritten": .noteworthy, "cinema": .avenirNext]
+        for (token, expected) in legacy {
+            let decoded = try JSONDecoder().decode(MemoryBookTextFont.self, from: Data("\"\(token)\"".utf8))
+            XCTAssertEqual(decoded, expected)
+            XCTAssertNotNil(decoded.font(size: 18, fallback: .body))
+        }
+        for font in MemoryBookTextFont.allCases {
+            XCTAssertEqual(try JSONDecoder().decode(MemoryBookTextFont.self, from: JSONEncoder().encode(font)), font)
+            XCTAssertNotNil(font.font(size: 18, fallback: .body))
+        }
+    }
+
+    func testV2StoryPlanMergeSplitAndMoveKeepEveryPhotoExactlyOnce() {
+        let ids = (0..<5).map { _ in UUID() }
+        let firstID = UUID(), secondID = UUID()
+        var chapters = [
+            Chapter(id: firstID, title: "First", dateLabel: "2019", photoIDs: Array(ids[0...1]), isHidden: false, sortOrder: 0),
+            Chapter(id: secondID, title: "Second", dateLabel: "2020", photoIDs: Array(ids[2...4]), isHidden: false, sortOrder: 1)
+        ]
+        XCTAssertTrue(StoryPlanMutation.mergeAdjacent(&chapters, firstID: firstID, secondID: secondID))
+        XCTAssertEqual(chapters.count, 1)
+        XCTAssertEqual(chapters[0].photoIDs, ids)
+        XCTAssertTrue(chapters[0].needsReflow)
+        XCTAssertTrue(StoryPlanMutation.split(&chapters, chapterID: firstID, atPhotoIndex: 2))
+        XCTAssertEqual(chapters.flatMap(\.photoIDs), ids)
+        XCTAssertEqual(Set(chapters.flatMap(\.photoIDs)).count, ids.count)
+        XCTAssertTrue(chapters.allSatisfy(\.needsReflow))
+        let newID = chapters[1].id
+        XCTAssertTrue(StoryPlanMutation.move(&chapters, chapterID: newID, direction: .earlier))
+        XCTAssertEqual(chapters.map(\.sortOrder), [0, 1])
+        XCTAssertEqual(chapters.first?.id, newID)
+        XCTAssertFalse(StoryPlanMutation.mergeAdjacent(&chapters, firstID: firstID, secondID: UUID()))
+    }
+
+    func testV2NeedsReflowNeverMarksLockedPages() {
+        let chapterID = UUID()
+        let locked = MemoryBookPage(kind: .chapterOpener, title: "Locked", chapterID: chapterID, pageNumber: 1, isLocked: true)
+        let editable = MemoryBookPage(kind: .photoSelection, title: "Editable", chapterID: chapterID, pageNumber: 2)
+        var book = MemoryBookDocument(profile: makeProfile(lifecycle: .ready), photos: [], chapters: [], pages: [locked, editable], style: .warmPaper, pageSize: .letter)
+        XCTAssertEqual(book.markPagesNeedsReflow(chapterIDs: [chapterID]), 1)
+        XCTAssertFalse(book.pages[0].needsReflow)
+        XCTAssertTrue(book.pages[1].needsReflow)
+    }
+
+    func testV2OnlySuggestionsCanBeIgnoredAndChoicePersists() throws {
+        let pageID = UUID()
+        let suggestion = MemoryBookIssue(severity: .suggestion, pageID: pageID, message: "Low contrast")
+        let blocker = MemoryBookIssue(severity: .blocking, pageID: pageID, message: "Missing photo")
+        var book = MemoryBookDocument(profile: makeProfile(lifecycle: .ready), photos: [], chapters: [], pages: [], style: .warmPaper, pageSize: .letter)
+        book.setBookCheckSuggestion(suggestion, ignored: true)
+        book.setBookCheckSuggestion(blocker, ignored: true)
+        XCTAssertTrue(book.isBookCheckSuggestionIgnored(suggestion))
+        XCTAssertFalse(book.isBookCheckSuggestionIgnored(blocker))
+        let restored = try JSONDecoder().decode(MemoryBookDocument.self, from: JSONEncoder().encode(book))
+        XCTAssertTrue(restored.isBookCheckSuggestionIgnored(suggestion))
+    }
+
+    func testV2FreeReaderExposesOnlySixToEightWatermarkedSamplePages() {
+        let pages = (1...14).map { index in
+            MemoryBookPage(kind: index == 1 ? .cover : (index == 2 ? .contents : (index == 14 ? .closing : (index.isMultiple(of: 3) ? .chapterOpener : .photoSelection))), title: "Page \(index)", pageNumber: index)
+        }
+        let book = MemoryBookDocument(profile: makeProfile(lifecycle: .ready), photos: [], chapters: [], pages: pages, style: .warmPaper, pageSize: .letter)
+        let sample = book.readerVisiblePages(watermarked: true)
+        XCTAssertTrue((6...8).contains(sample.count))
+        XCTAssertEqual(book.readerVisiblePages(watermarked: false), pages)
+        XCTAssertTrue(Set(sample.map(\.id)).isSubset(of: Set(pages.map(\.id))))
+    }
 }
 
 private final class DeterministicMemoryBookAssetProvider: MemoryBookAssetImageProviding, @unchecked Sendable {
@@ -2510,3 +2939,66 @@ private struct CancelledPurchaseService: PurchaseServicing {
 }
 private struct SuccessfulExporter: PDFExporting { func export(profile: PetProfile, photos: [ArchivePhoto], chapters: [Chapter], pageSize: PDFPageSize) async throws -> URL { URL(fileURLWithPath: "/tmp/archive.pdf") } }
 private struct FailingExporter: PDFExporting { func export(profile: PetProfile, photos: [ArchivePhoto], chapters: [Chapter], pageSize: PDFPageSize) async throws -> URL { throw TestServiceError.unavailable } }
+
+/// Pixel-level proof that `croppedToAnimal` crops the correct half of the image.
+/// The math of the coordinate conversion is tested elsewhere; this guards
+/// against a silent Y-flip in the actual `CGImage.cropping(to:)` on device.
+final class CroppedToAnimalPixelTests: XCTestCase {
+    /// Builds a 100x100 image whose TOP half (top-left view) is red and bottom
+    /// half is blue. CGContext has a bottom-left origin, so the top half is
+    /// drawn at the high-y rows.
+    private func makeTopRedBottomBlueImage() -> CGImage {
+        let size = 100
+        let context = CGContext(
+            data: nil, width: size, height: size, bitsPerComponent: 8,
+            bytesPerRow: size * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        // Bottom half (context y 0..<50) = blue.
+        context.setFillColor(red: 0, green: 0, blue: 1, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: size, height: size / 2))
+        // Top half (context y 50..<100) = red -> this is the image's top edge.
+        context.setFillColor(red: 1, green: 0, blue: 0, alpha: 1)
+        context.fill(CGRect(x: 0, y: size / 2, width: size, height: size / 2))
+        return context.makeImage()!
+    }
+
+    private func averageColor(_ image: CGImage) -> (r: Int, g: Int, b: Int) {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let context = CGContext(
+            data: &pixel, width: 1, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return (Int(pixel[0]), Int(pixel[1]), Int(pixel[2]))
+    }
+
+    func testCroppingTopLeftRegionReturnsPixelsFromTheTopOfTheImage() {
+        let image = makeTopRedBottomBlueImage()
+        // Top-left normalized region covering the top half, margin 0 to isolate
+        // the crop geometry from margin expansion.
+        let topHalf = CGRect(x: 0, y: 0, width: 1, height: 0.5)
+        let cropped = VisionFocalRegionDetector.croppedToAnimal(image, region: topHalf, margin: 0)
+        let color = averageColor(cropped)
+        XCTAssertGreaterThan(color.r, 200, "Top-left region must crop the RED top half, not the blue bottom (a Y-flip would return blue)")
+        XCTAssertLessThan(color.b, 60, "Cropped top half must not contain the bottom blue region")
+        XCTAssertLessThan(cropped.height, image.height, "Cropping to half height must actually reduce the image")
+    }
+
+    func testCroppingBottomHalfReturnsBluePixels() {
+        let image = makeTopRedBottomBlueImage()
+        let bottomHalf = CGRect(x: 0, y: 0.5, width: 1, height: 0.5)
+        let cropped = VisionFocalRegionDetector.croppedToAnimal(image, region: bottomHalf, margin: 0)
+        let color = averageColor(cropped)
+        XCTAssertGreaterThan(color.b, 200, "Bottom-half top-left region must crop the BLUE bottom of the image")
+        XCTAssertLessThan(color.r, 60, "Cropped bottom half must not contain the top red region")
+    }
+
+    func testNilRegionReturnsOriginalImageUnchanged() {
+        let image = makeTopRedBottomBlueImage()
+        let result = VisionFocalRegionDetector.croppedToAnimal(image, region: nil, margin: 0.2)
+        XCTAssertEqual(result.width, image.width)
+        XCTAssertEqual(result.height, image.height)
+    }
+}

@@ -18,8 +18,10 @@ The editor should therefore remain a release blocker until the P0 creative-contr
 - PDF image requests now derive from each element's physical print footprint. Poppler verifies the four-photo Letter grid at 300×300 PPI.
 - Book Check now evaluates actual per-placement effective PPI, warns at 150–299 PPI and blocks below 150 PPI.
 - A new export gate blocks untouched automatic Fill crops that have no focal metadata and retain less than 65% of the source; users may intentionally approve the result by opening Crop and confirming it.
-- The latest unit suite passes 107/107, the focused real-PhotoKit crop-gate UI test passes, and the unsigned iphoneos Release app builds with no Debug QA marker leakage.
-- This does **not** close aesthetic approval: simulator Vision cannot create an inference context, and the no-focal portrait cat crop visibly loses its face. The defect can no longer silently export, but physical-iPhone focal evidence remains P0.
+- Recovery also offers Full Photo/frame changes when Crop cannot preserve subject and print PPI. Full-screen Crop has visible precision controls, and photo-panel precision buttons now accumulate independently.
+- Fit-frame normalization now preserves the source's physical aspect on Letter/A4 instead of treating normalized page axes as square.
+- The latest unit suite passes 108/108; real-PhotoKit repair/export, exact Book Check deep links and repeatable precision controls pass focused UI tests. The unsigned iphoneos Release app builds with no Debug QA marker leakage.
+- The inspected Letter PDF now preserves the full no-focal cat at the correct portrait aspect. This closes the known simulator-output defect, but simulator Vision still cannot create an inference context and physical-iPhone focal evidence remains P0.
 
 ## What the current implementation does well
 

@@ -34,6 +34,19 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Choose reference photos"].exists)
     }
 
+    func testDeniedManualImportRequiresThreePhotosBeforeReview() {
+        // The current denied fixture enters the actual manual 04 surface;
+        // it does not rely on obsolete privacy-button copy or Photos dialogs.
+        launch(demoRoute: "references", demoState: "manual")
+
+        XCTAssertTrue(app.staticTexts["Choose the moments you want to review."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["0 / 500 selected · 3 more needed"].exists)
+        let review = app.buttons["Review selected photos"]
+        XCTAssertTrue(review.exists)
+        XCTAssertFalse(review.isEnabled, "Two or fewer manual photos must not enter review or scanning")
+        XCTAssertFalse(app.staticTexts["Looking through the moments."].exists, "Manual import must never invoke the PhotoKit scanner")
+    }
+
     func testDemoRoutes01Through04RenderAndCaptureEvidence() {
         renderAndCapture([
             ("welcome", "Keep a life close."),
@@ -185,6 +198,118 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sensitive photos stay out of your archive"].waitForExistence(timeout: 3))
     }
 
+    func testV22AdjudicationFixturesExposeDeniedStaleRecheckAndSinglePeriodPaths() {
+        // S01/S03/S04/S06/S11/S12: each is independently reachable without
+        // Photos, StoreKit, or a stale persisted archive.
+        launch(demoRoute: "privacy", demoState: "denied")
+        XCTAssertTrue(app.buttons["Import photos manually"].waitForExistence(timeout: 3))
+
+        launch(demoRoute: "confirm", demoState: "review-stale")
+        XCTAssertTrue(app.buttons["STALE · 1"].waitForExistence(timeout: 3))
+
+        launch(demoRoute: "rechecking")
+        XCTAssertTrue(app.otherElements["Checking latest edits"].waitForExistence(timeout: 3))
+
+        launch(demoRoute: "preview", demoState: "single-period-six-pages")
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["PAGE 1 OF 6"].exists)
+    }
+
+    func testStoryPlanMergeConfirmsImpactAndShowsResultSummary() {
+        launch(demoRoute: "timeline")
+        let merge = app.buttons["Merge chapter 1 with next"]
+        XCTAssertTrue(merge.waitForExistence(timeout: 3))
+        merge.tap()
+
+        XCTAssertTrue(app.buttons["Merge as one chapter"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@",
+            "Photo order is preserved; affected unlocked pages will be marked for review and locked pages stay unchanged."
+        )).firstMatch.exists)
+        app.buttons["Merge as one chapter"].tap()
+
+        let summary = app.descendants(matching: .any)["Story plan impact summary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@",
+            "without losing or duplicating photos"
+        )).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Pages need review"].exists)
+    }
+
+    func testStoryPlanSplitConfirmsImpactAndShowsResultSummary() {
+        launch(demoRoute: "timeline")
+        let split = app.buttons["Split chapter 1"]
+        XCTAssertTrue(split.waitForExistence(timeout: 3))
+        split.tap()
+
+        let boundary = app.buttons["After photo 1 · 1 + 2"]
+        XCTAssertTrue(boundary.waitForExistence(timeout: 3))
+        boundary.tap()
+
+        let confirm = app.buttons["Split into two chapters"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@",
+            "Affected unlocked pages will need layout review; locked pages stay unchanged."
+        )).firstMatch.exists)
+        confirm.tap()
+
+        let summary = app.descendants(matching: .any)["Story plan impact summary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(
+            format: "label CONTAINS %@",
+            "exact photo order"
+        )).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Pages need review"].exists)
+    }
+
+    func testCaptureWarmPaperReaderPagesForLetterAndA4Evidence() throws {
+        XCUIDevice.shared.orientation = .portrait
+        for paper in ["letter", "a4"] {
+            if app.state != .notRunning { app.terminate() }
+            app.launchArguments = [
+                "-uiTesting",
+                "-uiDemoRoute", "preview",
+                "-uiDemoState", "visual-fixture",
+                "-uiDemoStyle", "warmPaper",
+                "-uiDemoPaper", paper
+            ]
+            app.launch()
+
+            let reader = app.otherElements["Reader single page"]
+            XCTAssertTrue(reader.waitForExistence(timeout: 5))
+            let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+                .appending(path: "tailor-reader-visual-evidence-v1/warmPaper/\(paper)", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            for page in 1...7 {
+                XCTAssertTrue(app.staticTexts["PAGE \(page) OF 7"].waitForExistence(timeout: 4))
+                let screenshot = reader.screenshot()
+                let attachment = XCTAttachment(screenshot: screenshot)
+                attachment.name = "reader-warmPaper-\(paper)-page-\(String(format: "%02d", page))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                let png = screenshot.pngRepresentation
+                try png.write(to: folder.appending(path: String(format: "reader-page-%02d.png", page)), options: .atomic)
+                if page < 7 { reader.swipeLeft() }
+            }
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.pathExtension == "png" }.count, 7)
+        }
+    }
+
+    func testVisualFixtureAlsoFeedsFinalPreviewAndKeepsNavigationOffPaper() {
+        XCUIDevice.shared.orientation = .portrait
+        launch(demoRoute: "finalPreview", demoState: "visual-fixture")
+        let reader = app.otherElements["Reader single page"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["PAGE 1 OF 7"].waitForExistence(timeout: 3))
+        reader.swipeLeft()
+        reader.swipeLeft()
+        XCTAssertTrue(app.staticTexts["PAGE 3 OF 7"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.descendants(matching: .any)["Reader contents"].exists, "Reader navigation must not be painted over the Contents paper page")
+        XCTAssertTrue(app.buttons["Contents"].exists, "Contents navigation remains available outside the paper")
+    }
+
     func testDemoRoutes09Through12RenderAndCaptureEvidence() {
         renderAndCapture([
             ("editor", "1 of 8"),
@@ -198,18 +323,22 @@ final class TailorOnboardingUITests: XCTestCase {
     func testPreviewSupportsStylesPageSizeAndPurchasedExportPath() {
         launch(demoRoute: "preview")
         XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Customize book"].exists)
-        app.buttons["Customize book"].tap()
-        XCTAssertTrue(app.navigationBars["Customize book"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Warm Paper"].exists)
-        XCTAssertTrue(app.buttons["Quiet Night"].exists)
-        XCTAssertTrue(app.buttons["Field Notes"].exists)
-        XCTAssertTrue(app.buttons["Cinema"].exists)
-        XCTAssertTrue(app.buttons["Film Album"].exists)
+        XCTAssertTrue(app.buttons["Customize"].exists)
+        XCTAssertTrue(app.buttons["Style"].exists)
+        XCTAssertTrue(app.buttons["Paper"].exists)
+        app.buttons["Paper"].tap()
+        XCTAssertTrue(app.navigationBars["Print size"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["US Letter"].exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Back to editor"].exists)
-        XCTAssertTrue(app.buttons["Unlock complete album · $19.99"].exists)
+        XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+        app.buttons["Style"].tap()
+        XCTAssertTrue(app.staticTexts["Choose how the story feels."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Warm Paper"].exists)
+        XCTAssertTrue(app.staticTexts["Quiet Night"].exists)
+        XCTAssertTrue(app.staticTexts["Field Notes"].exists)
+        XCTAssertTrue(app.staticTexts["Cinema"].exists)
+        XCTAssertTrue(app.staticTexts["Film Album"].exists)
 
         launch(demoRoute: "preview", demoState: "preview-purchased")
         XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
@@ -302,7 +431,7 @@ final class TailorOnboardingUITests: XCTestCase {
     func testFreeReaderContentsExplainsWhenChapterIsOutsideSample() {
         XCUIDevice.shared.orientation = .portrait
         launch(demoRoute: "preview", demoState: "preview-sample-truncated")
-        XCTAssertTrue(app.staticTexts["PAGE 1 OF 7"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
 
         app.buttons["Contents"].tap()
         XCTAssertTrue(app.navigationBars["Contents"].waitForExistence(timeout: 3))
@@ -316,12 +445,12 @@ final class TailorOnboardingUITests: XCTestCase {
         app.buttons["Keep reading"].tap()
         XCTAssertTrue(app.navigationBars["Contents"].exists)
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.staticTexts["PAGE 1 OF 7"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
     }
 
     func testPurchaseFailurePreservesTheUnlockScreenAndRestorePath() {
         launch(demoRoute: "purchase", demoState: "purchase-failed")
-        XCTAssertTrue(app.staticTexts["$19.99 · One-time purchase"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.descendants(matching: .any)["Localized unlock price"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Your purchase could not be completed. Your album is still here."].exists)
         XCTAssertTrue(app.buttons["Unlock complete album"].exists)
         XCTAssertTrue(app.buttons["Restore purchase"].exists)
@@ -340,6 +469,59 @@ final class TailorOnboardingUITests: XCTestCase {
         app.buttons["Unlock complete album"].tap()
         XCTAssertTrue(app.staticTexts["Your purchase is pending approval. Your album and edits are still here."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+    }
+
+    func testPurchasePriceUnavailableCanRetryAndEnableUnlock() {
+        launch(demoRoute: "purchase", demoState: "purchase-price-retry")
+        XCTAssertTrue(app.staticTexts["Price unavailable"].waitForExistence(timeout: 3))
+        let unlock = app.buttons["Unlock complete album"]
+        XCTAssertTrue(unlock.exists)
+        XCTAssertFalse(unlock.isEnabled)
+
+        let retry = app.buttons["Retry unlock price"]
+        XCTAssertTrue(retry.exists && retry.isHittable)
+        retry.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["Localized unlock price"].waitForExistence(timeout: 3))
+        XCTAssertTrue(unlock.isEnabled)
+        XCTAssertFalse(app.staticTexts["Price unavailable"].exists)
+    }
+
+    func testBookCheckSuggestionCanBeIgnoredAndUndone() {
+        launch(demoRoute: "bookCheck", demoState: "book-check-ignore")
+        let ignore = app.buttons["Keep and ignore suggestion"].firstMatch
+        XCTAssertTrue(ignore.waitForExistence(timeout: 4))
+        ignore.tap()
+
+        let confirm = app.buttons["Confirm ignore Book Check suggestion"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
+        confirm.tap()
+
+        XCTAssertTrue(app.staticTexts["Ignored by you · risk remains recorded"].waitForExistence(timeout: 3))
+        let undo = app.buttons["Undo ignore"].firstMatch
+        XCTAssertTrue(undo.exists && undo.isHittable)
+        undo.tap()
+
+        XCTAssertTrue(app.buttons["Keep and ignore suggestion"].firstMatch.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Ignored by you · risk remains recorded"].exists)
+    }
+
+    func testFinalPreviewEditWithBlockingResultReturnsThroughBookCheck() {
+        launch(demoRoute: "finalPreview")
+        let reader = app.otherElements["Reader single page"]
+        XCTAssertTrue(reader.waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
+        reader.swipeLeft()
+        reader.swipeLeft()
+        XCTAssertTrue(app.staticTexts["PAGE 3 OF 8"].waitForExistence(timeout: 3))
+
+        app.buttons["Edit book"].tap()
+        XCTAssertTrue(app.staticTexts["3 of 8"].waitForExistence(timeout: 4))
+        app.buttons["Back"].firstMatch.tap()
+
+        XCTAssertTrue(app.staticTexts["A few pages need attention."].waitForExistence(timeout: 4))
+        XCTAssertTrue(app.buttons["Review blocking issues"].exists)
+        XCTAssertFalse(reader.exists, "A newly blocked revision must not briefly reveal the stale Final Preview")
     }
 
     func testExportCompletionAndFailureKeepLocalActionsVisible() {
@@ -409,7 +591,7 @@ final class TailorOnboardingUITests: XCTestCase {
         app.buttons["Pages"].tap()
         XCTAssertTrue(app.navigationBars["Pages"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.otherElements["Page 1 canvas thumbnail"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Structured page"].exists)
+        XCTAssertTrue(app.staticTexts["Locked layout page"].exists)
         XCTAssertTrue(app.buttons["Page 1 card"].exists)
         app.buttons["Done"].tap()
 

@@ -20,6 +20,15 @@ final class StoredPetProfile {
     /// Aggregate local-only recognition feedback. Optional preserves migration
     /// compatibility with archives saved before this field existed.
     var recognitionFeedbackData: Data?
+    /// v2.2 additive blobs keep the SwiftData row backward compatible while
+    /// each domain contract remains independently Codable and migratable.
+    var storyPlanDraftData: Data?
+    var archiveCheckpointData: Data?
+    var bookCheckResultsData: Data?
+    var activeRecognitionGenerationData: Data?
+    var recognitionMatchesData: Data?
+    var manualAssetsData: Data?
+    var returnContextStackData: Data?
     var updatedAt: Date
 
     init(profile: PetProfile) {
@@ -38,6 +47,13 @@ final class StoredPetProfile {
         memoryBookData = nil
         exportRecordsData = nil
         recognitionFeedbackData = nil
+        storyPlanDraftData = nil
+        archiveCheckpointData = nil
+        bookCheckResultsData = nil
+        activeRecognitionGenerationData = nil
+        recognitionMatchesData = nil
+        manualAssetsData = nil
+        returnContextStackData = nil
         updatedAt = .now
     }
 
@@ -75,6 +91,13 @@ final class StoredPetProfile {
             memoryBook: memoryBookData.flatMap { try? JSONDecoder().decode(MemoryBookDocument.self, from: $0) },
             exportRecords: exportRecordsData.flatMap { try? JSONDecoder().decode([MemoryBookExportRecord].self, from: $0) } ?? [],
             recognitionFeedback: recognitionFeedbackData.flatMap { try? JSONDecoder().decode(PetRecognitionFeedbackSummary.self, from: $0) },
+            storyPlanDraft: storyPlanDraftData.flatMap { try? JSONDecoder().decode(StoryPlanDraft.self, from: $0) },
+            archiveCheckpoint: archiveCheckpointData.flatMap { try? JSONDecoder().decode(ArchiveCheckpoint.self, from: $0) },
+            bookCheckResults: bookCheckResultsData.flatMap { try? JSONDecoder().decode([BookCheckResult].self, from: $0) } ?? [],
+            activeRecognitionGeneration: activeRecognitionGenerationData.flatMap { try? JSONDecoder().decode(RecognitionGeneration.self, from: $0) },
+            recognitionMatches: recognitionMatchesData.flatMap { try? JSONDecoder().decode([RecognitionMatchRecord].self, from: $0) } ?? [],
+            manualAssets: manualAssetsData.flatMap { try? JSONDecoder().decode([ManualAssetReference].self, from: $0) } ?? [],
+            returnContextStack: returnContextStackData.flatMap { try? JSONDecoder().decode(ReturnContextStack.self, from: $0) } ?? .init(),
             updatedAt: updatedAt
         )
     }
@@ -90,6 +113,13 @@ final class StoredPetProfile {
         // Recompute at the persistence boundary so direct domain mutations
         // cannot save a stale aggregate beside the user's photo decisions.
         recognitionFeedbackData = try? JSONEncoder().encode(.make(from: document.photos) as PetRecognitionFeedbackSummary)
+        storyPlanDraftData = try? document.storyPlanDraft.map { try JSONEncoder().encode($0) }
+        archiveCheckpointData = try? document.archiveCheckpoint.map { try JSONEncoder().encode($0) }
+        bookCheckResultsData = try? JSONEncoder().encode(document.bookCheckResults)
+        activeRecognitionGenerationData = try? document.activeRecognitionGeneration.map { try JSONEncoder().encode($0) }
+        recognitionMatchesData = try? JSONEncoder().encode(document.recognitionMatches)
+        manualAssetsData = try? JSONEncoder().encode(document.manualAssets)
+        returnContextStackData = try? JSONEncoder().encode(document.returnContextStack)
         updatedAt = document.updatedAt
     }
 }

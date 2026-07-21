@@ -94,6 +94,15 @@ enum ScanWorkloadPolicy {
     }
 }
 
+/// The first image is intentionally cheap because it is requested for the
+/// whole library. The second is requested only after the target dog/cat gate
+/// passes, preserving detail for individual-similarity evidence without
+/// turning a large library scan into a full-resolution photo download.
+enum ScanImageResolution {
+    static let speciesGate = CGSize(width: 256, height: 256)
+    static let identityFeature = CGSize(width: 768, height: 768)
+}
+
 /// Versioned local thresholds. Defaults are deliberately conservative starting
 /// points, not calibrated claims: they must be reviewed against a labelled,
 /// consented-on-device acceptance set before any release adjustment.
@@ -101,6 +110,11 @@ struct PetRecognitionPolicy: Codable, Equatable, Sendable {
     static let currentVersion = 1
 
     var animalSpeciesGate: Double
+    /// Independent `VNClassifyImageRequest` confirmation for automatic
+    /// selection of the requested generic species ("dog" or "cat"). It is
+    /// deliberately separate from `VNRecognizeAnimalsRequest`: the latter can
+    /// label macaques as dogs. Low evidence remains reviewable, never dropped.
+    var genericSpeciesAutoSelectionGate: Double
     var identityCandidateGate: Double
     var highAutoConfidenceGate: Double
     var highAutoReferenceAgreementGate: Double
@@ -108,18 +122,24 @@ struct PetRecognitionPolicy: Codable, Equatable, Sendable {
 
     static let standard = PetRecognitionPolicy(
         animalSpeciesGate: 0.60,
+        genericSpeciesAutoSelectionGate: 0.06,
         identityCandidateGate: 0.42,
         highAutoConfidenceGate: 0.86,
         highAutoReferenceAgreementGate: 0.56,
         highAutoMinimumReferenceMatches: 2
     )
 
-    func assess(animalConfidence: Double, referenceSimilarities: [Double]) -> PetRecognitionAssessment {
+    func assess(
+        animalConfidence: Double,
+        genericSpeciesConfidence: Double = 1,
+        referenceSimilarities: [Double]
+    ) -> PetRecognitionAssessment {
         let normalizedAnimal = min(max(animalConfidence, 0), 1)
+        let normalizedGenericSpecies = min(max(genericSpeciesConfidence, 0), 1)
         let normalizedSimilarities = referenceSimilarities.map { min(max($0, 0), 1) }
         let maximumSimilarity = normalizedSimilarities.max() ?? 0
         let agreementCount = normalizedSimilarities.filter { $0 >= highAutoReferenceAgreementGate }.count
-        let combinedConfidence = min(0.99, max(0.01, normalizedAnimal * 0.35 + maximumSimilarity * 0.65))
+        let combinedConfidence = min(0.99, max(0.01, normalizedAnimal * 0.25 + normalizedGenericSpecies * 0.20 + maximumSimilarity * 0.55))
 
         guard normalizedAnimal >= animalSpeciesGate else {
             return PetRecognitionAssessment(disposition: .rejectedSpecies, confidence: combinedConfidence, maximumReferenceSimilarity: maximumSimilarity, agreeingReferenceCount: agreementCount, referenceCount: normalizedSimilarities.count)
@@ -128,13 +148,14 @@ struct PetRecognitionPolicy: Codable, Equatable, Sendable {
             return PetRecognitionAssessment(disposition: .rejectedIdentity, confidence: combinedConfidence, maximumReferenceSimilarity: maximumSimilarity, agreeingReferenceCount: agreementCount, referenceCount: normalizedSimilarities.count)
         }
         let highAuto = combinedConfidence >= highAutoConfidenceGate
+            && normalizedGenericSpecies >= genericSpeciesAutoSelectionGate
             && agreementCount >= highAutoMinimumReferenceMatches
-        return PetRecognitionAssessment(disposition: highAuto ? .autoSelected : .needsReview, confidence: combinedConfidence, maximumReferenceSimilarity: maximumSimilarity, agreeingReferenceCount: agreementCount, referenceCount: normalizedSimilarities.count)
+        return PetRecognitionAssessment(disposition: highAuto ? .autoSelected : .pending, confidence: combinedConfidence, maximumReferenceSimilarity: maximumSimilarity, agreeingReferenceCount: agreementCount, referenceCount: normalizedSimilarities.count)
     }
 }
 
 enum PetRecognitionDisposition: Equatable, Sendable {
-    case rejectedSpecies, rejectedIdentity, needsReview, autoSelected
+    case rejectedSpecies, rejectedIdentity, pending, autoSelected
 }
 
 struct PetRecognitionAssessment: Equatable, Sendable {
@@ -144,7 +165,7 @@ struct PetRecognitionAssessment: Equatable, Sendable {
     var agreeingReferenceCount: Int
     var referenceCount: Int
 
-    var isCandidate: Bool { disposition == .needsReview || disposition == .autoSelected }
+    var isCandidate: Bool { disposition == .pending || disposition == .autoSelected }
 }
 
 /// Pure, labelled-sample reporting. It is intentionally not wired to change a
@@ -200,7 +221,7 @@ enum VisualDuplicatePolicy {
                   return hammingDistance(hash, existingHash) <= maximumHammingDistance
               })
         else { return .unique }
-        if anchor.decision != .needsReview {
+        if anchor.decision != .pending {
             return .suppressedByHistoricalDecision(anchorIdentifier: anchor.assetLocalIdentifier)
         }
         let kind: VisualDuplicateKind
@@ -219,6 +240,7 @@ enum VisualDuplicatePolicy {
 
 struct VisionAnimalRecognitionResult {
     let confidence: Double
+    let genericSpeciesConfidence: Double
     let subjectRegion: CGRect?
 }
 
@@ -241,7 +263,8 @@ enum VisionFocalRegionDetector {
             return (Double(label.confidence), FocalCropPolicy.topLeftRegion(fromVisionBoundingBox: observation.boundingBox))
         }
         if let best = candidates.max(by: { $0.confidence < $1.confidence }) {
-            return VisionAnimalRecognitionResult(confidence: best.confidence, subjectRegion: best.region)
+            let genericSpeciesConfidence = try genericSpeciesConfidence(in: image, species: preferredSpecies)
+            return VisionAnimalRecognitionResult(confidence: best.confidence, genericSpeciesConfidence: genericSpeciesConfidence, subjectRegion: best.region)
         }
         // A production scan with a requested species must stop here. Running
         // two saliency models for every landscape, screenshot, or wrong-species
@@ -249,9 +272,56 @@ enum VisionFocalRegionDetector {
         // that rejected asset eligible. Generic callers (such as the isolated
         // framing QA route) may still ask for composition-only fallback data.
         guard preferredSpecies == nil else {
-            return VisionAnimalRecognitionResult(confidence: 0, subjectRegion: nil)
+            return VisionAnimalRecognitionResult(confidence: 0, genericSpeciesConfidence: 0, subjectRegion: nil)
         }
-        return VisionAnimalRecognitionResult(confidence: 0, subjectRegion: try? salientRegion(in: image))
+        return VisionAnimalRecognitionResult(confidence: 0, genericSpeciesConfidence: 0, subjectRegion: try? salientRegion(in: image))
+    }
+
+    /// A second, independent Vision model is only evaluated after the animal
+    /// recognizer has already found the requested species. This keeps the
+    /// large-library workload bounded while preventing cross-species false
+    /// positives from receiving an automatic selection.
+    private static func genericSpeciesConfidence(in image: CGImage, species: PetSpecies?) throws -> Double {
+        guard let species else { return 0 }
+        let keyword = species == .dog ? "dog" : "cat"
+        let request = VNClassifyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: image)
+        try handler.perform([request])
+        return Double(
+            (request.results ?? [])
+                .filter { $0.identifier.caseInsensitiveCompare(keyword) == .orderedSame }
+                .map(\.confidence)
+                .max() ?? 0
+        )
+    }
+
+    /// Crops the image to the detected animal region expanded by `margin` on
+    /// each side (default 20%), so identity feature prints describe the pet
+    /// rather than the background. `region` is top-left normalized (as produced
+    /// by `FocalCropPolicy.topLeftRegion`); CGImage pixels are also top-left, so
+    /// no Y flip is needed. Returns the original image when there is no usable
+    /// region or cropping fails, keeping the pipeline safe by default.
+    static func croppedToAnimal(_ image: CGImage, region: CGRect?, margin: CGFloat = 0.20) -> CGImage {
+        guard let region, region.width > 0, region.height > 0 else { return image }
+        let expanded = CGRect(
+            x: region.minX - region.width * margin,
+            y: region.minY - region.height * margin,
+            width: region.width * (1 + margin * 2),
+            height: region.height * (1 + margin * 2)
+        )
+        let clamped = expanded.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard !clamped.isNull, clamped.width > 0, clamped.height > 0 else { return image }
+        let width = CGFloat(image.width)
+        let height = CGFloat(image.height)
+        let pixelRect = CGRect(
+            x: (clamped.minX * width).rounded(.down),
+            y: (clamped.minY * height).rounded(.down),
+            width: (clamped.width * width).rounded(.up),
+            height: (clamped.height * height).rounded(.up)
+        ).intersection(CGRect(x: 0, y: 0, width: width, height: height))
+        guard !pixelRect.isNull, pixelRect.width >= 1, pixelRect.height >= 1,
+              let cropped = image.cropping(to: pixelRect) else { return image }
+        return cropped
     }
 
     private static func salientRegion(in image: CGImage) throws -> CGRect? {
@@ -353,7 +423,7 @@ struct PhotoKitVisionScanner: PetScanServicing {
         await featureIndex.load()
 
         let referenceAssets = PHAsset.fetchAssets(withLocalIdentifiers: profile.referenceAssetIdentifiers, options: nil)
-        let referencePrints = try await featurePrints(for: referenceAssets)
+        let referencePrints = try await featurePrints(for: referenceAssets, species: profile.species, index: featureIndex)
         guard ScanReferencePolicy.isValid(
             requestedIdentifiers: profile.referenceAssetIdentifiers,
             resolvedCount: referenceAssets.count,
@@ -410,7 +480,9 @@ struct PhotoKitVisionScanner: PetScanServicing {
                 // expensive embedding model for every landscape, person, and
                 // screenshot in a large library.
                 let animalConfidence = animalRecognition.confidence
-                guard ScanWorkloadPolicy.shouldGenerateEmbedding(animalConfidence: animalConfidence) else {
+                let genericSpeciesConfidence = animalRecognition.genericSpeciesConfidence
+                guard ScanWorkloadPolicy.shouldGenerateEmbedding(animalConfidence: animalConfidence),
+                      animalConfidence >= policy.animalSpeciesGate else {
                     auditMetrics.speciesRejected += 1
                     await onProgress(ScanCheckpoint(nextAssetIndex: index + 1, totalAssets: assets.count, candidates: candidates, assetCatalogFingerprint: catalog.fingerprint, auditMetrics: auditMetrics, processedAssetIdentifiers: processedAssetIdentifiers))
                     continue
@@ -419,14 +491,36 @@ struct PhotoKitVisionScanner: PetScanServicing {
                 let candidatePrint: VNFeaturePrintObservation?
                 if let cached = await featureIndex.observation(for: asset.localIdentifier) {
                     candidatePrint = cached
-                } else if let generated = try? featurePrint(for: cgImage) {
-                    await featureIndex.store(generated, for: asset.localIdentifier)
-                    candidatePrint = generated
                 } else {
-                    candidatePrint = nil
+                    let identitySource: CGImage
+                    if let highResolution = try? await image(for: asset, targetSize: ScanImageResolution.identityFeature, highQuality: true) {
+                        identitySource = highResolution
+                        auditMetrics.highResolutionIdentityImages += 1
+                    } else {
+                        // Do not discard a local memory merely because its larger
+                        // rendition is unavailable. It remains a lower-quality
+                        // candidate and is visible in local scan diagnostics.
+                        identitySource = cgImage
+                        auditMetrics.identityImageFallbacks += 1
+                    }
+                    // Identity feature print is taken from the detected animal region
+                    // (expanded by a safety margin), not the whole frame, so the
+                    // embedding describes the pet rather than the background.
+                    let candidateImage = VisionFocalRegionDetector.croppedToAnimal(identitySource, region: animalRecognition.subjectRegion)
+                    if let generated = try? featurePrint(for: candidateImage) {
+                        await featureIndex.store(generated, for: asset.localIdentifier)
+                        candidatePrint = generated
+                    } else {
+                        candidatePrint = nil
+                    }
                 }
-                let similarities = (try? similaritiesToReferences(candidatePrint, references: referencePrints)) ?? []
-                let assessment = policy.assess(animalConfidence: animalConfidence, referenceSimilarities: similarities)
+                let distances = (try? distancesToReferences(candidatePrint, references: referencePrints)) ?? []
+                let similarities = distances.map(similarity(from:))
+                let assessment = policy.assess(
+                    animalConfidence: animalConfidence,
+                    genericSpeciesConfidence: genericSpeciesConfidence,
+                    referenceSimilarities: similarities
+                )
                 // Both strict species and identity gates must pass before an
                 // image enters review. A weak single-reference match can still
                 // be reviewed, but it can never be selected automatically.
@@ -445,13 +539,13 @@ struct PhotoKitVisionScanner: PetScanServicing {
                     continue
                 }
                 var duplicateGroupID: String?
-                var decision: PhotoDecision = assessment.disposition == .autoSelected ? .selected : .needsReview
+                var decision: PhotoDecision = assessment.disposition == .autoSelected ? .selected : .pending
                 if case .grouped(let anchorIdentifier, _) = duplicate {
                     auditMetrics.duplicateGrouped += 1
                     duplicateGroupID = "visual-\(anchorIdentifier)"
                     // A duplicate is never auto-selected. It remains a review
                     // candidate even if its anchor had strong evidence.
-                    decision = .needsReview
+                    decision = .pending
                     if let anchorIndex = candidates.firstIndex(where: { $0.assetLocalIdentifier == anchorIdentifier }),
                        candidates[anchorIndex].visualDuplicateGroupID == nil {
                         candidates[anchorIndex].visualDuplicateGroupID = duplicateGroupID
@@ -477,7 +571,9 @@ struct PhotoKitVisionScanner: PetScanServicing {
                         maximumReferenceSimilarity: assessment.maximumReferenceSimilarity,
                         agreeingReferenceCount: assessment.agreeingReferenceCount,
                         referenceCount: assessment.referenceCount,
-                        wasHighAutoSelected: assessment.disposition == .autoSelected
+                        wasHighAutoSelected: assessment.disposition == .autoSelected,
+                        minimumReferenceDistance: distances.min(),
+                        medianReferenceDistance: median(of: distances)
                     ),
                     subjectRegion: animalRecognition.subjectRegion,
                     visualDuplicateGroupID: duplicateGroupID
@@ -492,6 +588,9 @@ struct PhotoKitVisionScanner: PetScanServicing {
         }
         await onProgress(ScanCheckpoint(nextAssetIndex: assets.count, totalAssets: assets.count, candidates: candidates, assetCatalogFingerprint: catalog.fingerprint, auditMetrics: auditMetrics, processedAssetIdentifiers: processedAssetIdentifiers))
         await featureIndex.flush()
+        #if DEBUG
+        print("[TailorRecognition] extractor=\(PetRecognitionVersion.featureExtractorVersion) total=\(assets.count) processed=\(auditMetrics.processed) candidates=\(auditMetrics.candidates) highResolution=\(auditMetrics.highResolutionIdentityImages) lowResolutionFallbacks=\(auditMetrics.identityImageFallbacks)")
+        #endif
         return candidates.sorted { $0.confidence > $1.confidence }
     }
 
@@ -499,27 +598,56 @@ struct PhotoKitVisionScanner: PetScanServicing {
         PetFeaturePrintIndex.delete(profileID: profileID)
     }
 
-    private func featurePrints(for assets: PHFetchResult<PHAsset>) async throws -> [VNFeaturePrintObservation] {
+    private func featurePrints(for assets: PHFetchResult<PHAsset>, species: PetSpecies, index: PetFeaturePrintIndex) async throws -> [VNFeaturePrintObservation] {
         var prints: [VNFeaturePrintObservation] = []
-        for index in 0..<assets.count {
-            let asset = assets.object(at: index)
-            guard let image = try? await image(for: asset), let print = try? featurePrint(for: image) else { continue }
+        for assetIndex in 0..<assets.count {
+            let asset = assets.object(at: assetIndex)
+            if let cached = await index.observation(for: asset.localIdentifier) {
+                prints.append(cached)
+                continue
+            }
+            guard let speciesImage = try? await image(for: asset) else { continue }
+            // References normally use the same detect → crop → feature-print
+            // flow as candidates. Unlike candidates, however, a reference is
+            // an explicit user choice: a false negative from the lightweight
+            // animal detector must not silently reduce a valid 3-photo
+            // selection below the minimum and block the scan at 0%.
+            //
+            // Fall back only for these user-selected references when the
+            // detector cannot locate the requested species. The fallback is
+            // intentionally not used for library candidates, so it cannot
+            // introduce people or other animals into review results.
+            let referenceImage: CGImage
+            let identityImage = (try? await image(for: asset, targetSize: ScanImageResolution.identityFeature, highQuality: true)) ?? speciesImage
+            if let recognition = try? animalRecognition(in: speciesImage, species: species),
+               recognition.confidence > 0 {
+                referenceImage = VisionFocalRegionDetector.croppedToAnimal(identityImage, region: recognition.subjectRegion)
+            } else {
+                referenceImage = identityImage
+            }
+            guard let print = try? featurePrint(for: referenceImage) else { continue }
+            await index.store(print, for: asset.localIdentifier)
             prints.append(print)
         }
+        await index.flush()
         return prints
     }
 
-    private func image(for asset: PHAsset) async throws -> CGImage {
+    private func image(
+        for asset: PHAsset,
+        targetSize: CGSize = ScanImageResolution.speciesGate,
+        highQuality: Bool = false
+    ) async throws -> CGImage {
         try await withCheckedThrowingContinuation { continuation in
             let options = PHImageRequestOptions()
-            options.deliveryMode = .fastFormat
-            options.resizeMode = .fast
+            options.deliveryMode = highQuality ? .highQualityFormat : .fastFormat
+            options.resizeMode = highQuality ? .exact : .fast
             // A user-selected reference can be iCloud-only. This downloads that
             // asset to the phone for on-device processing; nothing is uploaded.
             options.isNetworkAccessAllowed = true
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: 256, height: 256),
+                targetSize: targetSize,
                 contentMode: .aspectFit,
                 options: options
             ) { image, info in
@@ -549,18 +677,29 @@ struct PhotoKitVisionScanner: PetScanServicing {
         return observation
     }
 
-    private func similaritiesToReferences(_ image: CGImage, references: [VNFeaturePrintObservation]) throws -> [Double] {
-        try similaritiesToReferences(try featurePrint(for: image), references: references)
-    }
-
-    private func similaritiesToReferences(_ candidate: VNFeaturePrintObservation?, references: [VNFeaturePrintObservation]) throws -> [Double] {
+    private func distancesToReferences(_ candidate: VNFeaturePrintObservation?, references: [VNFeaturePrintObservation]) throws -> [Double] {
         guard !references.isEmpty else { throw ScanFailure.insufficientReferences }
         guard let candidate else { return [] }
-        return try references.map { reference -> Double in
+        return try references.map { reference in
             var distance: Float = 0
             try candidate.computeDistance(&distance, to: reference)
-            return max(0, min(1, 1 - Double(distance) / 20))
+            return Double(distance)
         }
+    }
+
+    /// Compatibility mapping for the existing review buckets. The raw distance
+    /// is persisted above for later calibration; this value is not treated as a
+    /// probability and will be replaced by calibrated multi-reference rules.
+    private func similarity(from distance: Double) -> Double {
+        max(0, min(1, 1 - distance / 20))
+    }
+
+    private func median(of values: [Double]) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        let middle = sorted.count / 2
+        if sorted.count.isMultiple(of: 2) { return (sorted[middle - 1] + sorted[middle]) / 2 }
+        return sorted[middle]
     }
 
     /// A small local average hash catches exact re-imports and near-identical
@@ -579,55 +718,92 @@ struct PhotoKitVisionScanner: PetScanServicing {
 
 }
 
-/// Local feature-print cache. It is intentionally file-backed for now; the
-/// repository boundary can migrate this same record shape to SQLite without
-/// changing scan or matching logic.
+private struct FeatureEmbeddingIndexSnapshot: Codable {
+    var schemaVersion: Int
+    var vectorsByVersionedAssetKey: [String: Data]
+}
+
+/// Local feature-print cache keyed only by asset + extractor version. Pet
+/// identity belongs to match generations, not reusable embeddings. The public
+/// profileID initializer is retained so old call sites and on-disk indexes can
+/// migrate without a destructive release.
 actor PetFeaturePrintIndex {
     private let fileURL: URL
+    private let legacyFileURL: URL
     private var vectors: [String: Data] = [:]
     private var loaded = false
 
     init(profileID: UUID, baseDirectory: URL = .applicationSupportDirectory) {
         fileURL = Self.fileURL(profileID: profileID, baseDirectory: baseDirectory)
+        legacyFileURL = Self.legacyFileURL(profileID: profileID, baseDirectory: baseDirectory)
     }
 
     static func fileURL(profileID: UUID, baseDirectory: URL = .applicationSupportDirectory) -> URL {
+        // profileID is deliberately ignored in v2.2. Keeping it in the method
+        // signature avoids breaking callers while the cache becomes reusable.
+        baseDirectory.appending(path: "Tailor/feature-index-v2.json")
+    }
+
+    private static func legacyFileURL(profileID: UUID, baseDirectory: URL) -> URL {
         baseDirectory.appending(path: "Tailor/feature-index-\(profileID.uuidString).json")
     }
 
     static func delete(profileID: UUID, baseDirectory: URL = .applicationSupportDirectory) {
         try? FileManager.default.removeItem(at: fileURL(profileID: profileID, baseDirectory: baseDirectory))
+        try? FileManager.default.removeItem(at: legacyFileURL(profileID: profileID, baseDirectory: baseDirectory))
     }
 
     func load() {
         guard !loaded else { return }
         loaded = true
-        guard let data = try? Data(contentsOf: fileURL), let decoded = try? JSONDecoder().decode([String: Data].self, from: data) else { return }
-        vectors = decoded
+        let decoder = JSONDecoder()
+        if let data = try? Data(contentsOf: fileURL) {
+            if let snapshot = try? decoder.decode(FeatureEmbeddingIndexSnapshot.self, from: data) {
+                vectors = snapshot.vectorsByVersionedAssetKey
+                return
+            }
+            // A short-lived development build may have written the legacy
+            // dictionary at the shared path. Accept and version it once.
+            if let legacy = try? decoder.decode([String: Data].self, from: data) {
+                vectors = Self.versioned(legacy)
+                return
+            }
+        }
+        guard let data = try? Data(contentsOf: legacyFileURL),
+              let legacy = try? decoder.decode([String: Data].self, from: data) else { return }
+        vectors = Self.versioned(legacy)
     }
 
-    func observation(for identifier: String) -> VNFeaturePrintObservation? {
-        guard let data = vectors[identifier] else { return nil }
+    func observation(for identifier: String, featureExtractorVersion: String = PetRecognitionVersion.featureExtractorVersion) -> VNFeaturePrintObservation? {
+        guard let data = vectors[FeatureEmbeddingKey(assetID: identifier, featureExtractorVersion: featureExtractorVersion).storageKey] else { return nil }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: VNFeaturePrintObservation.self, from: data)
     }
 
-    func store(_ observation: VNFeaturePrintObservation, for identifier: String) {
-        vectors[identifier] = try? NSKeyedArchiver.archivedData(withRootObject: observation, requiringSecureCoding: true)
+    func store(_ observation: VNFeaturePrintObservation, for identifier: String, featureExtractorVersion: String = PetRecognitionVersion.featureExtractorVersion) {
+        let key = FeatureEmbeddingKey(assetID: identifier, featureExtractorVersion: featureExtractorVersion).storageKey
+        vectors[key] = try? NSKeyedArchiver.archivedData(withRootObject: observation, requiringSecureCoding: true)
     }
 
     // Internal for file-contract tests; production calls the Vision overload.
-    func storeSerializedFeatureData(_ data: Data, for identifier: String) {
-        vectors[identifier] = data
+    func storeSerializedFeatureData(_ data: Data, for identifier: String, featureExtractorVersion: String = PetRecognitionVersion.featureExtractorVersion) {
+        vectors[FeatureEmbeddingKey(assetID: identifier, featureExtractorVersion: featureExtractorVersion).storageKey] = data
     }
 
-    func serializedFeatureData(for identifier: String) -> Data? {
-        vectors[identifier]
+    func serializedFeatureData(for identifier: String, featureExtractorVersion: String = PetRecognitionVersion.featureExtractorVersion) -> Data? {
+        vectors[FeatureEmbeddingKey(assetID: identifier, featureExtractorVersion: featureExtractorVersion).storageKey]
     }
 
     func flush() {
         let directory = fileURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        guard let data = try? JSONEncoder().encode(vectors) else { return }
+        let snapshot = FeatureEmbeddingIndexSnapshot(schemaVersion: 2, vectorsByVersionedAssetKey: vectors)
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+
+    private static func versioned(_ legacy: [String: Data]) -> [String: Data] {
+        Dictionary(uniqueKeysWithValues: legacy.map {
+            (FeatureEmbeddingKey(assetID: $0.key).storageKey, $0.value)
+        })
     }
 }

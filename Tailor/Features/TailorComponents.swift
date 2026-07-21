@@ -6,6 +6,7 @@ import Photos
 /// be used. A selected ArchivePhoto is not proof that the user retained access.
 enum PhotoAssetAvailability {
     static func isAvailable(_ photo: ArchivePhoto) -> Bool {
+        if ManualAssetStore.isAvailable(identifier: photo.assetLocalIdentifier) { return true }
         // UI automation uses deterministic identifiers instead of a developer's
         // Photos library. Production identifiers always resolve through Photos.
         let arguments = ProcessInfo.processInfo.arguments
@@ -17,6 +18,7 @@ enum PhotoAssetAvailability {
 enum PhotoAssetImageLoader {
     static func image(identifier: String, targetSize: CGSize = CGSize(width: 1_200, height: 1_200)) async -> UIImage? {
         if let fixture = MemoryBookVisualQAAsset.image(identifier: identifier) { return fixture }
+        if let manual = ManualAssetStore.image(identifier: identifier) { return manual }
         return await Task.detached(priority: .userInitiated) {
             let result = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
             guard let asset = result.firstObject else { return nil }
@@ -171,6 +173,20 @@ struct TailorProgressRing: View {
     var body: some View { ZStack { Circle().stroke(TailorColor.mist, lineWidth: 14); Circle().trim(from: 0, to: max(0.03, progress)).stroke(TailorColor.clay, style: .init(lineWidth: 14, lineCap: .round)).rotationEffect(.degrees(-90)); VStack { Text("\(Int(progress * 100))%").font(.title.weight(.bold)); Text(label).font(.caption) } }.frame(width: 180, height: 180).accessibilityElement(children: .ignore).accessibilityLabel("Scan progress").accessibilityValue("\(Int(progress * 100)) percent") }
 }
 
+/// Process-wide thumbnail cache keyed by the same render key the view derives
+/// (identifier + treatment + adjustments). Grid cells recycle constantly while
+/// a long review list scrolls; without a cache each reappearance cleared the
+/// image and issued a fresh PhotoKit request, and the resulting placeholder →
+/// image relayout fed the ScrollView's contentSize oscillation. A cache lets a
+/// recycled cell paint its final image immediately, with no intermediate state.
+private final class ThumbnailImageCache {
+    static let shared = ThumbnailImageCache()
+    private let store = NSCache<NSString, UIImage>()
+    private init() { store.countLimit = 400 }
+    func image(for key: String) -> UIImage? { store.object(forKey: key as NSString) }
+    func insert(_ image: UIImage, for key: String) { store.setObject(image, forKey: key as NSString) }
+}
+
 /// A small PhotoKit-backed image view used by archive screens. The app stores only the
 /// Photos local identifier, never a second copy of the user's image.
 struct PhotoAssetThumbnail: View {
@@ -201,14 +217,31 @@ struct PhotoAssetThumbnail: View {
     }
 
     private func requestImage() {
+        // A recycled cell whose image is already cached paints it immediately,
+        // with no placeholder frame and no repeat PhotoKit request — this is
+        // what keeps a scrolling grid's contentSize from oscillating.
+        if let cached = ThumbnailImageCache.shared.image(for: renderKey) {
+            image = cached
+            return
+        }
         image = nil
+        if let manual = ManualAssetStore.image(identifier: identifier) {
+            let processed = MemoryBookImageProcessor.process(manual, treatment: treatment, adjustments: adjustments)
+            ThumbnailImageCache.shared.insert(processed, for: renderKey)
+            image = processed
+            return
+        }
         let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
         // UI automation crop fixtures deliberately avoid a user's Photos
         // library. They are deterministic local bitmaps with centre and edge
         // markers, so visual evidence can prove crop/rotation behavior rather
         // than showing the generic missing-photo placeholder.
         guard let asset = fetched.firstObject else {
-            if let fixture = localCropFixture(identifier: identifier) { image = MemoryBookImageProcessor.process(fixture, treatment: treatment, adjustments: adjustments) }
+            if let fixture = localCropFixture(identifier: identifier) {
+                let processed = MemoryBookImageProcessor.process(fixture, treatment: treatment, adjustments: adjustments)
+                ThumbnailImageCache.shared.insert(processed, for: renderKey)
+                image = processed
+            }
             return
         }
         let options = PHImageRequestOptions()
@@ -219,6 +252,7 @@ struct PhotoAssetThumbnail: View {
         options.deliveryMode = .highQualityFormat
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
+        let key = renderKey
         requestID = PHImageManager.default().requestImage(
             for: asset,
             targetSize: CGSize(width: 480, height: 480),
@@ -227,6 +261,7 @@ struct PhotoAssetThumbnail: View {
         ) { result, _ in
             guard let result else { return }
             let rendered = MemoryBookImageProcessor.process(result, treatment: treatment, adjustments: adjustments)
+            ThumbnailImageCache.shared.insert(rendered, for: key)
             Task { @MainActor in image = rendered }
         }
     }

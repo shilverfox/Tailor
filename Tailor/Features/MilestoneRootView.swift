@@ -1,27 +1,48 @@
 import SwiftUI
 import Photos
+import PhotosUI
 import Vision
 import ImageIO
 
 struct MilestoneRootView: View {
     @EnvironmentObject private var container: AppContainer
     @Environment(\.scenePhase) private var scenePhase
-    @State private var route: AppRoute = .welcome; @State private var scope: PhotoAccessScope = .notDetermined; @State private var name = "Milo"; @State private var species: PetSpecies = .dog; @State private var year = "2024"; @State private var referenceAssetIdentifiers: [String] = []; @State private var profileID = UUID(); @State private var restoredDraft = false; @State private var hasSavedArchive = false; @State private var scanProgress = 0.0; @State private var scanCompletedAssets = 0; @State private var scanTotalAssets = 0; @State private var scanMatchCount = 0; @State private var paused = false; @State private var isScanning = false; @State private var scanDisplayState = ""; @State private var scanTask: Task<Void, Never>?; @State private var style: AlbumStyle = .warmPaper; @State private var pageSize: PDFPageSize = .letter; @State private var selectedChapterID: UUID?; @State private var purchased = false; @State private var isPurchasing = false; @State private var document: ArchiveDocument?; @State private var memoryBook: MemoryBookDocument?; @State private var operationError: String?; @State private var purchaseNotice: String?; @State private var exportURL: URL?; @State private var videoURL: URL?; @State private var isExporting = false; @State private var exportCompletedPages = 0; @State private var exportTotalPages = 0; @State private var exportTask: Task<Void, Never>?; @State private var didInitializeRoot = false; @State private var realPhotoQADiagnostic = "not-started"; @StateObject private var photoLibrary = PhotoLibraryAccess()
+    @State private var route: AppRoute = .welcome; @State private var scope: PhotoAccessScope = .notDetermined; @State private var name = "Milo"; @State private var species: PetSpecies = .dog; @State private var year = "2024"; @State private var referenceAssetIdentifiers: [String] = []; @State private var profileID = UUID(); @State private var restoredDraft = false; @State private var hasSavedArchive = false; @State private var scanProgress = 0.0; @State private var scanCompletedAssets = 0; @State private var scanTotalAssets = 0; @State private var scanMatchCount = 0; @State private var paused = false; @State private var isScanning = false; @State private var scanDisplayState = ""; @State private var scanTask: Task<Void, Never>?; @State private var style: AlbumStyle = .warmPaper; @State private var pageSize: PDFPageSize = .letter; @State private var selectedChapterID: UUID?; @State private var purchased = false; @State private var isPurchasing = false; @State private var productDisplayPrice: String?; @State private var document: ArchiveDocument?; @State private var memoryBook: MemoryBookDocument?; @State private var operationError: String?; @State private var purchaseNotice: String?; @State private var exportURL: URL?; @State private var isExporting = false; @State private var exportCompletedPages = 0; @State private var exportTotalPages = 0; @State private var exportTask: Task<Void, Never>?; @State private var isPreparingSmartDraft = false; @State private var smartDraftError: String?; @State private var editorReturnRoute: AppRoute = .preview; @State private var bookCheckTarget: BookCheckNavigationTarget?; @State private var bookCheckFocusKey: String?; @State private var didInitializeRoot = false; @State private var realPhotoQADiagnostic = "not-started"; @StateObject private var photoLibrary = PhotoLibraryAccess()
+    @State private var arrivalYear = ""
+    @State private var previewLogicalPageID: UUID?
+    @State private var finalPreviewLogicalPageID: UUID?
+    @State private var editorInitialPageID: UUID?
+    @State private var isLoadingProductPrice = false
+    @State private var productPriceLoadFailed = false
+    @State private var manualImportMode = false
+    @State private var isCreatingBook = false
+    @State private var editorStylePageID: UUID?
 
     var body: some View { Group { switch route {
     case .welcome: WelcomeFeatureView(hasSavedArchive: hasSavedArchive, next: advance, openArchives: { go(.archive) })
-    case .privacy: PrivacyFeatureView(scope: $scope, photoLibrary: photoLibrary, next: advance, back: back)
-    case .profile: ProfileFeatureView(name: $name, species: $species, departureYear: $year, next: advance, back: back)
-    case .references: ReferencesFeatureView(referenceAssetIdentifiers: $referenceAssetIdentifiers, next: advance, back: back)
-    case .scan: ScanFeatureView(progress: $scanProgress, completedAssets: scanCompletedAssets, totalAssets: scanTotalAssets, matchCount: scanMatchCount, previewAssetIdentifiers: Array((document?.photos ?? []).prefix(4).map(\.assetLocalIdentifier)), displayState: scanDisplayState, paused: $paused, isScanning: isScanning, errorMessage: operationError, start: startScan, pause: pauseScan, next: advance, back: leaveScan)
-    case .confirm: ReviewFeatureView(name: name, photos: photosBinding, next: createTimeline, back: back, showsPendingTimelinePromptOnAppear: isPendingTimelineUITestFixture)
-    case .timeline: TimelineFeatureView(name: name, chapters: chaptersBinding, photos: document?.photos ?? [], edit: { chapterID in selectedChapterID = chapterID; go(.chapter) }, next: { go(.editor) }, back: back)
+    case .privacy: PrivacyFeatureView(scope: $scope, photoLibrary: photoLibrary, next: { enterProfile(manual: false) }, manualImport: { enterProfile(manual: true) }, back: back)
+    case .profile: ProfileFeatureView(name: $name, species: $species, arrivalYear: $arrivalYear, departureYear: $year, next: completeProfile, continueLater: saveProfileForLater, back: back)
+    case .references:
+        if isManualImportFlow {
+            ManualImportFeatureView(manualAssets: document?.manualAssets ?? [], importItems: importManualItems, removeAsset: removeManualAsset, next: completeManualImport, continueLater: saveCurrentCheckpointForLater, back: back)
+        } else {
+            ReferencesFeatureView(referenceAssetIdentifiers: $referenceAssetIdentifiers, next: completeReferences, selectionChanged: persistReferenceSelection, continueLater: saveCurrentCheckpointForLater, back: back)
+        }
+    case .scan: ScanFeatureView(progress: $scanProgress, completedAssets: scanCompletedAssets, totalAssets: scanTotalAssets, matchCount: scanMatchCount, previewAssetIdentifiers: Array((document?.photos ?? []).prefix(4).map(\.assetLocalIdentifier)), displayState: scanDisplayState, paused: $paused, isScanning: isScanning, errorMessage: operationError, start: startScan, pause: pauseScan, next: completeScanReview, back: leaveScan)
+    case .confirm: ReviewFeatureView(name: name, activeGenerationID: document?.activeRecognitionGeneration?.matchGenerationID, photos: photosBinding, next: beginSmartDraft, back: { go(isManualImportFlow ? .references : .scan) }, continueLater: saveCurrentCheckpointForLater, appendManualItems: isManualImportFlow ? importManualItems : nil, showsPendingTimelinePromptOnAppear: isPendingTimelineUITestFixture)
+    case .smartDraft: SmartDraftFeatureView(summary: draftSummary, isPreparing: isPreparingSmartDraft, errorMessage: smartDraftError, continueToStory: continueToStoryPlan, retry: beginSmartDraft, useSimpleTimeline: useSimpleTimeline, continueLater: { persistDocument(); go(.archive) }, back: { go(.confirm) })
+    case .timeline: TimelineFeatureView(name: name, chapters: chaptersBinding, photos: document?.photos ?? [], edit: { chapterID in selectedChapterID = chapterID; go(.chapter) }, next: confirmStoryPlan, continueLater: saveCurrentCheckpointForLater, back: { go(.smartDraft) })
     case .chapter: ChapterEditorFeatureView(chapters: chaptersBinding, photos: document?.photos ?? [], selectedChapterID: selectedChapterID, next: { persistDocument(); go(.timeline) }, back: { go(.timeline) })
-    case .editor: AlbumEditorFeatureView(memoryBook: $memoryBook, purchased: purchased || isPurchaseBypassed, back: back, preview: { persistDocument(); go(.preview) }, export: { persistDocument(); go((purchased || isPurchaseBypassed) ? .export : .purchase) }, persist: persistDocument).onAppear { ensureMemoryBook() }
-    case .preview: PreviewFeatureView(name: name, style: $style, pageSize: $pageSize, chapters: document?.chapters ?? [], photos: document?.photos ?? [], memoryBook: $memoryBook, purchased: purchased || isPurchaseBypassed, next: { updateAlbumStyle(); persistDocument(); go((purchased || isPurchaseBypassed) ? .export : .purchase) }, back: back).onAppear { ensureMemoryBook() }.onChange(of: style) { _, _ in updateAlbumStyle(); memoryBook?.style = style; memoryBook?.updatedAt = .now; persistDocument() }.onChange(of: pageSize) { _, newSize in updateBookPageSize(newSize) }
-    case .purchase: PurchaseFeatureView(purchase: purchase, restore: restorePurchase, errorMessage: operationError, noticeMessage: purchaseNotice, isPurchasing: isPurchasing, next: { purchased = true; go(.export) }, back: back)
-    case .export: ExportFeatureView(name: name, exportURL: exportURL, exportRecord: latestExportRecord, memoryBook: memoryBook ?? document?.memoryBook, videoURL: videoURL, errorMessage: operationError, isExporting: isExporting, completedPages: exportCompletedPages, totalPages: exportTotalPages, createPDF: exportPDF, cancelPDF: cancelExport, createVideo: exportVideo, done: { go(.archive) }, back: { go(.timeline) }).onAppear { ensureMemoryBook() }
-    case .archive: ArchivesFeatureView(name: name, pdfURL: storedPDFURL, exportRecord: latestExportRecord, openArchive: { ensureMemoryBook(); go(.preview) }, rescan: rescanArchive, restart: restartArchive, delete: deleteArchive)
+    case .bookStyle: BookStyleFeatureView(style: $style, pageSize: $pageSize, book: memoryBook, isApplying: isCreatingBook, errorMessage: operationError, apply: applySelectedBookStyle, continueLater: saveCurrentCheckpointForLater, back: { go(memoryBook == nil ? .timeline : .preview) })
+    case .editor: AlbumEditorFeatureView(memoryBook: $memoryBook, purchased: purchased || isPurchaseBypassed, back: closeEditor, preview: { persistDocument(); bookCheckTarget = nil; go(.preview) }, export: { persistDocument(); bookCheckTarget = nil; enterBookCheck() }, persist: persistDocument, openStyle: openEditorStyle, initialBookCheckTarget: bookCheckTarget, initialPageID: editorInitialPageID).onAppear { ensureMemoryBook() }
+    case .editorStyle: EditorStyleFeatureView(book: $memoryBook, selectedPageID: editorStylePageID, apply: finishEditorStyle, cancel: cancelEditorStyle)
+    case .preview: PreviewFeatureView(name: name, style: $style, pageSize: $pageSize, chapters: document?.chapters ?? [], photos: document?.photos ?? [], memoryBook: $memoryBook, selectedLogicalPageID: $previewLogicalPageID, purchased: purchased || isPurchaseBypassed, next: { persistDocument(); enterBookCheck() }, back: { go(.timeline) }, editPage: { pageID in openEditor(returningTo: .preview, pageID: pageID) }, changeStyle: { go(.bookStyle) }).onAppear { ensureMemoryBook() }.onChange(of: pageSize) { _, newSize in updateBookPageSize(newSize) }
+    case .bookCheck: BookCheckFeatureView(book: $memoryBook, focusedIssueKey: $bookCheckFocusKey, editIssue: openBookCheckIssue, continueFlow: continueFromBookCheck, back: { go(.preview) }, persist: persistDocument).onAppear { ensureMemoryBook(); evaluateAndPersistBookCheck() }
+    case .purchase: PurchaseFeatureView(revisionID: memoryBook?.documentRevisionID, paperSize: memoryBook?.pageSize ?? pageSize, displayPrice: productDisplayPrice, isLoadingPrice: isLoadingProductPrice, priceLoadFailed: productPriceLoadFailed, retryPrice: { Task { await loadProductPrice() } }, purchase: purchase, restore: restorePurchase, errorMessage: operationError, noticeMessage: purchaseNotice, isPurchasing: isPurchasing, next: { purchased = true; go(.finalPreview) }, back: { go(.bookCheck) }).task { guard let book = memoryBook, let checked = document?.cachedBookCheckResult(for: book), checked.status != .blocked else { go(.bookCheck); return }; if productDisplayPrice == nil { await loadProductPrice() } }
+    case .finalPreview: PreviewFeatureView(name: name, style: $style, pageSize: $pageSize, chapters: document?.chapters ?? [], photos: document?.photos ?? [], memoryBook: $memoryBook, selectedLogicalPageID: $finalPreviewLogicalPageID, purchased: true, next: { persistDocument(); guard hasCurrentBookCheckPass else { enterBookCheck(); return }; go(.export) }, back: { openEditor(returningTo: .finalPreview, pageID: finalPreviewLogicalPageID) }, editPage: { pageID in openEditor(returningTo: .finalPreview, pageID: pageID) }, changeStyle: { go(.bookStyle) }).onAppear { ensureMemoryBook(); if !hasCurrentBookCheckPass && !isUITestFixtureSession { enterBookCheck() } }.onChange(of: pageSize) { _, newSize in updateBookPageSize(newSize) }
+    case .rechecking: LatestEditsCheckingView()
+    case .export: ExportFeatureView(name: name, exportURL: exportURL, exportRecord: latestExportRecord, memoryBook: memoryBook ?? document?.memoryBook, errorMessage: operationError, isExporting: isExporting, completedPages: exportCompletedPages, totalPages: exportTotalPages, createPDF: exportPDF, cancelPDF: cancelExport, done: { go(.archive) }, back: { go(.finalPreview) }).onAppear { ensureMemoryBook() }
+    case .archive: ArchivesFeatureView(name: name, pdfURL: storedPDFURL, exportRecord: latestExportRecord, resumeActionLabel: document?.archiveCheckpoint?.resumeRoute.actionLabel ?? "Continue archive", canRescan: document?.archiveCheckpoint?.stage == .documentReady, openArchive: resumeArchive, rescan: rescanArchive, restart: restartArchive, delete: deleteArchive)
     } }
     .animation(.easeInOut(duration: 0.2), value: route)
     .overlay(alignment: .topLeading) {
@@ -54,7 +75,11 @@ struct MilestoneRootView: View {
         guard phase == .active,
               !isPurchaseBypassed,
               !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return }
-        Task { purchased = await container.purchase.isEntitled() }
+        Task {
+            photoLibrary.refresh()
+            await reconcileManualAssetsIfAuthorized()
+            purchased = await container.purchase.isEntitled()
+        }
     }
 
     }
@@ -64,12 +89,26 @@ struct MilestoneRootView: View {
     private var isPurchaseBypassed: Bool {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
-        // Never bypass StoreKit merely because this is a Debug build. A local
-        // developer can opt in explicitly, while UI automation stays isolated.
-        return arguments.contains("-uiBypassPurchase") && !arguments.contains("-uiTesting")
+        // The bypass is reachable only from an explicit UI-automation session.
+        // Ordinary Debug launches, TestFlight and App Store builds all use StoreKit.
+        return arguments.contains("-uiTesting") && arguments.contains("-uiBypassPurchase")
         #else
         return false
         #endif
+    }
+
+    private var isUITestFixtureSession: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-uiTesting")
+        #else
+        false
+        #endif
+    }
+
+    private var hasCurrentBookCheckPass: Bool {
+        guard let book = memoryBook,
+              let result = document?.cachedBookCheckResult(for: book) else { return false }
+        return result.status != .blocked
     }
 
     private var isPendingTimelineUITestFixture: Bool {
@@ -111,14 +150,7 @@ struct MilestoneRootView: View {
 
     private func advance() {
         guard let next = AppRoute(rawValue: route.rawValue + 1) else { return }
-        if route == .profile || route == .references {
-            Task {
-                await saveDraft()
-                go(next)
-            }
-        } else {
-            go(next)
-        }
+        go(next)
     }
     private func back() { guard let previous = AppRoute(rawValue: route.rawValue - 1) else { return }; go(previous) }
     private func leaveScan() {
@@ -126,6 +158,92 @@ struct MilestoneRootView: View {
         back()
     }
     private func go(_ newRoute: AppRoute) { route = newRoute; container.router.navigate(to: newRoute) }
+
+    private var isManualImportFlow: Bool {
+        manualImportMode || scope == .denied || scope == .restricted || !(document?.manualAssets.isEmpty ?? true)
+    }
+
+    private func enterProfile(manual: Bool) {
+        manualImportMode = manual
+        let profile = PetProfile(id: profileID, name: name, species: species, arrivalYear: Int(arrivalYear), departureYear: Int(year) ?? Calendar.current.component(.year, from: .now), lifecycle: .draft, albumStyle: style)
+        var value = document ?? ArchiveDocument(profile: profile)
+        value.profile = profile
+        commit(value, checkpoint: .profile, route: .profile)
+    }
+
+    private func completeProfile() {
+        let profile = PetProfile(id: profileID, name: name.trimmingCharacters(in: .whitespacesAndNewlines), species: species, arrivalYear: Int(arrivalYear), departureYear: Int(year) ?? Calendar.current.component(.year, from: .now), lifecycle: .draft, referenceAssetIdentifiers: referenceAssetIdentifiers, albumStyle: style)
+        var value = document ?? ArchiveDocument(profile: profile)
+        value.profile = profile
+        commit(value, checkpoint: .references, route: .references)
+    }
+
+    private func saveProfileForLater() {
+        let profile = PetProfile(id: profileID, name: name.trimmingCharacters(in: .whitespacesAndNewlines), species: species, arrivalYear: Int(arrivalYear), departureYear: Int(year) ?? Calendar.current.component(.year, from: .now), lifecycle: .draft, referenceAssetIdentifiers: referenceAssetIdentifiers, albumStyle: style)
+        var value = document ?? ArchiveDocument(profile: profile)
+        value.profile = profile
+        commit(value, checkpoint: .profile, route: .archive)
+    }
+
+    private func persistReferenceSelection() {
+        guard var value = document else { return }
+        value.profile.referenceAssetIdentifiers = referenceAssetIdentifiers
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: .references)
+        value.updatedAt = .now
+        document = value
+        persistDocument()
+    }
+
+    private func saveCurrentCheckpointForLater() {
+        guard let value = document else { go(.archive); return }
+        commit(value, checkpoint: value.archiveCheckpoint?.stage ?? .profile, route: .archive)
+    }
+
+    private func completeReferences() {
+        guard var value = document, referenceAssetIdentifiers.count >= 3 else { return }
+        value.profile.referenceAssetIdentifiers = referenceAssetIdentifiers
+        commit(value, checkpoint: .scan, route: .scan)
+    }
+
+    private func completeManualImport() {
+        guard let value = document, value.manualAssets.count >= 3 else { return }
+        commit(value, checkpoint: .review, route: .confirm)
+    }
+
+    private func completeScanReview() {
+        guard let value = document else { return }
+        commit(value, checkpoint: .review, route: .confirm)
+    }
+
+    private func commit(_ source: ArchiveDocument, checkpoint stage: ArchiveCheckpointStage, route destination: AppRoute? = nil) {
+        var value = source
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: stage)
+        value.updatedAt = .now
+        Task { @MainActor in
+            do {
+                try await container.repository.save(document: value)
+                document = value
+                memoryBook = value.memoryBook
+                hasSavedArchive = true
+                if let destination { go(destination) }
+            } catch { operationError = error.localizedDescription }
+        }
+    }
+
+    private func resumeArchive() {
+        guard let resume = document?.archiveCheckpoint?.resumeRoute else { go(.profile); return }
+        let destination: AppRoute = switch resume {
+        case .profile: .profile
+        case .references: .references
+        case .scan: .scan
+        case .photoReview: .confirm
+        case .smartDraft: .smartDraft
+        case .storyPlan: .timeline
+        case .bookStyle: .bookStyle
+        case .bookPreview: .preview
+        }
+        go(destination)
+    }
 
     /// UI automation only: `-uiTesting -uiDemoRoute <route>` supplies local, deterministic
     /// content so every product screen can be rendered without Photos, Vision, or StoreKit.
@@ -138,7 +256,9 @@ struct MilestoneRootView: View {
         let routes: [String: AppRoute] = [
             "welcome": .welcome, "privacy": .privacy, "profile": .profile, "references": .references,
             "scan": .scan, "confirm": .confirm, "timeline": .timeline, "chapter": .chapter, "editor": .editor,
-            "preview": .preview, "purchase": .purchase, "export": .export, "archive": .archive
+            "preview": .preview, "purchase": .purchase, "export": .export, "archive": .archive,
+            "smartDraft": .smartDraft, "bookStyle": .bookStyle, "bookCheck": .bookCheck, "finalPreview": .finalPreview,
+            "editorStyle": .editorStyle, "rechecking": .rechecking
         ]
         guard arguments.contains("-uiTesting"),
               let routeIndex = arguments.firstIndex(of: "-uiDemoRoute"),
@@ -186,7 +306,7 @@ struct MilestoneRootView: View {
                     : (demoState == "crop-square-plus15" ? CGSize(width: 1_200, height: 1_200) : nil)),
             subjectRegion: isFocalCropFixture ? CGRect(x: 0.72, y: 0.30, width: 0.20, height: 0.34) : nil
         )
-        let uncertainPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000012")!, assetLocalIdentifier: "ui-photo-2", decision: .needsReview, confidence: 0.62, createdAt: .now)
+        let uncertainPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000012")!, assetLocalIdentifier: "ui-photo-2", decision: .pending, confidence: 0.62, createdAt: .now)
         let excludedPhoto = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000013")!, assetLocalIdentifier: "ui-photo-3", decision: .excluded, confidence: 0.22, createdAt: .now)
         let chapter = Chapter(id: UUID(uuidString: "00000000-0000-0000-0000-000000000021")!, title: "Days together", dateLabel: "2018–2024", photoIDs: [firstPhoto.id], isHidden: false, sortOrder: 0)
 
@@ -196,18 +316,18 @@ struct MilestoneRootView: View {
         year = String(demoProfile.departureYear)
         // The privacy reference state represents first launch. Other direct
         // route fixtures retain limited access so they never request Photos.
-        scope = requestedRoute == .privacy ? .notDetermined : .limited
+        scope = (requestedRoute == .privacy && demoState == "denied") || demoState == "manual" ? .denied : (requestedRoute == .privacy ? .notDetermined : .limited)
         referenceAssetIdentifiers = demoProfile.referenceAssetIdentifiers
         var demoPhotos = [firstPhoto, uncertainPhoto, excludedPhoto]
         var demoChapters = [chapter]
         if requestedRoute == .confirm && demoState.isEmpty {
             let additionalHigh = ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!, assetLocalIdentifier: "ui-high-2", decision: .selected, confidence: 0.91, createdAt: .now)
             let pending = (0..<110).map { index in
-                ArchivePhoto(id: UUID(), assetLocalIdentifier: "ui-review-\(index + 1)", decision: .needsReview, confidence: index == 0 ? 0.62 : 0.58, createdAt: .now)
+                ArchivePhoto(id: UUID(), assetLocalIdentifier: "ui-review-\(index + 1)", decision: .pending, confidence: index == 0 ? 0.62 : 0.58, createdAt: .now)
             }
             demoPhotos = [firstPhoto, additionalHigh] + pending
         }
-        if [.timeline, .chapter, .editor, .preview, .purchase, .export, .archive].contains(requestedRoute) {
+        if [.smartDraft, .timeline, .chapter, .bookStyle, .editor, .preview, .bookCheck, .purchase, .finalPreview, .export, .archive].contains(requestedRoute) {
             let cropFixtureSize: CGSize? = switch demoState {
             case "crop-landscape", "crop-landscape-focal-right": CGSize(width: 1_600, height: 900)
             case "crop-portrait-plus15", "crop-portrait-minus15": CGSize(width: 900, height: 1_600)
@@ -265,8 +385,8 @@ struct MilestoneRootView: View {
         }
         if requestedRoute == .confirm, demoState == "review-batch" {
             demoPhotos += [
-                ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!, assetLocalIdentifier: "ui-photo-4", decision: .needsReview, confidence: 0.69, createdAt: .now),
-                ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000015")!, assetLocalIdentifier: "ui-photo-5", decision: .needsReview, confidence: 0.58, createdAt: .now)
+                ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!, assetLocalIdentifier: "ui-photo-4", decision: .pending, confidence: 0.69, createdAt: .now),
+                ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000015")!, assetLocalIdentifier: "ui-photo-5", decision: .pending, confidence: 0.58, createdAt: .now)
             ]
         }
         // A deterministic post-review state for the complete archive-flow
@@ -274,12 +394,35 @@ struct MilestoneRootView: View {
         // starts at the exact hand-off contract where every chosen photo is
         // confirmed and timeline creation must proceed without another prompt.
         if requestedRoute == .confirm, demoState == "review-ready" {
-            demoPhotos = [firstPhoto, uncertainPhoto]
+            // This is the real hand-off state from 06 to Smart Draft, not a
+            // visually similar shortcut: the production planner requires at
+            // least three eligible, confirmed moments before it will create a
+            // draft. Keep every photo selected and safety-approved so the
+            // complete 06 → 07 → 08 → 09 route remains executable in UI tests.
+            let thirdConfirmed = ArchivePhoto(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000014")!,
+                assetLocalIdentifier: "ui-photo-4",
+                decision: .selected,
+                confidence: 0.89,
+                createdAt: .now,
+                sensitivityState: .normal
+            )
+            demoPhotos = [firstPhoto, uncertainPhoto, thirdConfirmed]
             demoPhotos[1].decision = .selected
             demoPhotos[1].sensitivityState = .normal
         }
         if requestedRoute == .confirm, demoState == "review-sensitive" {
-            demoPhotos.append(ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000016")!, assetLocalIdentifier: "ui-photo-6", decision: .needsReview, confidence: 0.51, createdAt: .now, sensitivityState: .needsSensitiveReview))
+            demoPhotos.append(ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000016")!, assetLocalIdentifier: "ui-photo-6", decision: .pending, confidence: 0.51, createdAt: .now, sensitivityState: .sensitive))
+        }
+        if requestedRoute == .confirm, demoState == "review-stale" {
+            demoPhotos.append(ArchivePhoto(id: UUID(uuidString: "00000000-0000-0000-0000-000000000017")!, assetLocalIdentifier: "ui-photo-stale", decision: .pending, confidence: 0.88, createdAt: .now, staleDecision: .selected))
+        }
+        if requestedRoute == .preview, demoState == "single-period-six-pages" {
+            let periodPhotos = (0..<3).map { index in
+                ArchivePhoto(id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", 81 + index))!, assetLocalIdentifier: "ui-single-period-\(index)", decision: .selected, confidence: 0.94, createdAt: .now)
+            }
+            demoPhotos = periodPhotos
+            demoChapters = [Chapter(id: UUID(uuidString: "00000000-0000-0000-0000-000000000081")!, title: "One season together", dateLabel: "2024", photoIDs: periodPhotos.map(\.id), isHidden: false, sortOrder: 0)]
         }
         let demoExportRecords: [MemoryBookExportRecord] = [.export, .archive].contains(requestedRoute)
             ? [MemoryBookExportRecord(
@@ -291,13 +434,40 @@ struct MilestoneRootView: View {
             )]
             : []
         document = ArchiveDocument(profile: demoProfile, photos: demoPhotos, chapters: demoChapters, exportRecords: demoExportRecords)
-        if demoState == "visual-fixture", [.editor, .preview].contains(requestedRoute) {
+        if demoState == "visual-fixture", [.editor, .preview, .finalPreview].contains(requestedRoute) {
             let fixture = MemoryBookVisualQAFixture.make(style: demoStyle, paper: demoPaper)
             // A UI-test-only replacement. Production routes never enter this
             // branch, and both surfaces bind to this exact document instance.
             document = ArchiveDocument(profile: fixture.profile, photos: fixture.photos, chapters: fixture.chapters, memoryBook: fixture)
             memoryBook = fixture
             name = fixture.profile.name
+        }
+        if demoState == "production-default-fixture", [.editor, .preview, .finalPreview].contains(requestedRoute) {
+            let fixture = MemoryBookProductionDefaultFixture.make(style: demoStyle, paper: demoPaper)
+            document = ArchiveDocument(profile: fixture.profile, photos: fixture.photos, chapters: fixture.chapters, memoryBook: fixture)
+            memoryBook = fixture
+            name = fixture.profile.name
+        }
+        if requestedRoute == .purchase, demoState.hasPrefix("purchase-") {
+            // Payment is guarded by the same cache key as production: current
+            // revision + current paper + current rules version.  Build a
+            // fully-valid deterministic document and persist the evaluated
+            // result rather than bypassing the Purchase route's Book Check
+            // gate. This keeps failure/cancel/offline UI independently
+            // testable while preserving the normal redirect for stale checks.
+            let fixture = MemoryBookVisualQAFixture.make(style: demoStyle, paper: demoPaper)
+            var purchaseDocument = ArchiveDocument(
+                profile: fixture.profile,
+                photos: fixture.photos,
+                chapters: fixture.chapters,
+                memoryBook: fixture
+            )
+            let result = BookCheckWorkflow.evaluate(fixture, assetIsAvailable: PhotoAssetAvailability.isAvailable)
+            purchaseDocument.storeBookCheckResult(result)
+            document = purchaseDocument
+            memoryBook = fixture
+            name = fixture.profile.name
+            profileID = fixture.profile.id
         }
         selectedChapterID = demoChapters.first?.id
         scanProgress = requestedRoute == .scan ? 0.42 : 1; scanCompletedAssets = requestedRoute == .scan ? 1_426 : 100; scanTotalAssets = requestedRoute == .scan ? 4_281 : 100; scanMatchCount = requestedRoute == .scan ? 39 : 2
@@ -317,7 +487,7 @@ struct MilestoneRootView: View {
         }
         style = demoStyle
         pageSize = demoPaper
-        purchased = isPurchaseBypassed || demoState == "visual-fixture" || (requestedRoute == .preview && ["preview-purchased", "preview-odd-purchased"].contains(demoState))
+        purchased = isPurchaseBypassed || demoState == "visual-fixture" || demoState == "production-default-fixture" || requestedRoute == .finalPreview || (requestedRoute == .preview && ["preview-purchased", "preview-odd-purchased"].contains(demoState))
         if requestedRoute != .scan || demoState.isEmpty { operationError = nil }
         // Export and archive demo routes represent the post-render state so
         // UI tests and visual review can exercise the real completion CTA
@@ -480,14 +650,49 @@ struct MilestoneRootView: View {
             id: profileID,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             species: species,
+            arrivalYear: Int(arrivalYear),
             departureYear: Int(year) ?? Calendar.current.component(.year, from: .now),
             lifecycle: .draft,
             referenceAssetIdentifiers: referenceAssetIdentifiers,
             albumStyle: style
         )
-        let updated = ArchiveDocument(profile: profile, photos: document?.photos ?? [], chapters: document?.chapters ?? [])
+        var updated = document ?? ArchiveDocument(profile: profile)
+        updated.profile = profile
+        updated.updatedAt = .now
         document = updated
         try? await container.repository.save(document: updated)
+    }
+
+    private func importManualItems(_ items: [PhotosPickerItem]) async throws -> Int {
+        guard var value = document else { return 0 }
+        let remaining = max(0, 500 - value.manualAssets.count)
+        guard remaining > 0 else { return value.manualAssets.count }
+        let imported = try await ManualAssetStore.importItems(Array(items.prefix(remaining)), profileID: value.id)
+        let knownFingerprints = Set(value.manualAssets.map(\.contentFingerprint))
+        let additions = imported.filter { !knownFingerprints.contains($0.asset.contentFingerprint) }
+        for duplicate in imported where knownFingerprints.contains(duplicate.asset.contentFingerprint) {
+            try? FileManager.default.removeItem(at: ManualAssetStore.url(for: duplicate.asset.relativePath))
+        }
+        value.manualAssets.append(contentsOf: additions.map(\.asset))
+        value.photos.append(contentsOf: additions.map(\.photo))
+        value.recognitionFeedback = .make(from: value.photos)
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: route == .confirm ? .review : .references)
+        value.updatedAt = .now
+        try await container.repository.save(document: value)
+        document = value
+        manualImportMode = true
+        return value.manualAssets.count
+    }
+
+    private func removeManualAsset(_ id: UUID) {
+        guard var value = document, let asset = value.manualAssets.first(where: { $0.id == id }) else { return }
+        try? FileManager.default.removeItem(at: ManualAssetStore.url(for: asset.relativePath))
+        value.manualAssets.removeAll { $0.id == id }
+        value.photos.removeAll { $0.manualAssetID == id }
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: .references)
+        value.updatedAt = .now
+        document = value
+        persistDocument()
     }
 
     private func restoreLatestDraftIfNeeded() async {
@@ -498,25 +703,45 @@ struct MilestoneRootView: View {
         profileID = profile.id
         name = profile.name
         species = profile.species
+        arrivalYear = profile.arrivalYear.map(String.init) ?? ""
         year = String(profile.departureYear)
         referenceAssetIdentifiers = profile.referenceAssetIdentifiers
         style = profile.albumStyle
         document = try? await container.repository.document(id: profile.id)
+        manualImportMode = !(document?.manualAssets.isEmpty ?? true)
         memoryBook = document?.memoryBook
         if let memoryBook { pageSize = memoryBook.pageSize }
-        if document?.profile.lifecycle == .ready || document?.profile.lifecycle == .exported {
-            hasSavedArchive = true
-        }
+        hasSavedArchive = document != nil
+        await reconcileManualAssetsIfAuthorized()
         if document?.profile.lifecycle == .exported, storedPDFURL != nil { exportURL = storedPDFURL }
         if let checkpoint = document?.scanCheckpoint, document?.profile.lifecycle == .scanning {
             scanCompletedAssets = checkpoint.progress.completedAssets; scanTotalAssets = checkpoint.progress.totalAssets; scanMatchCount = checkpoint.candidates.count; scanProgress = Double(checkpoint.progress.completedAssets) / Double(max(checkpoint.progress.totalAssets, 1))
             paused = true
-            go(.scan)
+            // Recovery is user-driven from Archive. Restoring must never
+            // silently restart an expensive operation.
         }
     }
 
     private var photosBinding: Binding<[ArchivePhoto]> { Binding(get: { document?.photos ?? [] }, set: { updatePhotos($0) }) }
-    private var chaptersBinding: Binding<[Chapter]> { Binding(get: { document?.chapters ?? [] }, set: { updateChapters($0) }) }
+
+    @MainActor
+    private func reconcileManualAssetsIfAuthorized() async {
+        guard var value = document else { return }
+        let pending = value.manualAssets.filter { $0.copyState == .privateCopy }
+        guard !pending.isEmpty else { return }
+        photoLibrary.refresh()
+        let mappings = await photoLibrary.fingerprintMappings(for: Set(pending.map(\.contentFingerprint)))
+        guard !mappings.isEmpty else { return }
+        ManualAssetStore.applyingMappings(mappings, to: &value, deleteCopies: false)
+        do {
+            try await container.repository.save(document: value)
+            ManualAssetStore.deleteMappedCopies(in: value)
+            document = value
+        } catch {
+            operationError = "Mapped photos were found, but Tailor could not save the updated references. The private copies were kept for recovery."
+        }
+    }
+    private var chaptersBinding: Binding<[Chapter]> { Binding(get: { document?.storyPlanDraft?.chapters ?? document?.chapters ?? [] }, set: { updateChapters($0) }) }
     private func updatePhotos(_ photos: [ArchivePhoto]) {
         guard var value = document else { return }
         value.photos = photos
@@ -531,16 +756,211 @@ struct MilestoneRootView: View {
         }
         value.updatedAt = .now
         document = value
-        memoryBook = nil
+        if var book = memoryBook {
+            let oldByID = Dictionary(uniqueKeysWithValues: book.photos.map { ($0.id, $0) })
+            let changedIDs = Set(photos.compactMap { oldByID[$0.id] == $0 ? nil : $0.id })
+                .union(oldByID.keys.filter { id in !photos.contains(where: { $0.id == id }) })
+            book.photos = photos
+            book.chapters = value.chapters
+            for index in book.pages.indices where !book.pages[index].isLocked && !changedIDs.isDisjoint(with: book.pages[index].photoIDs) {
+                book.pages[index].needsReflow = true
+            }
+            book.documentRevisionID = UUID()
+            book.updatedAt = .now
+            memoryBook = book
+        }
         persistDocument()
     }
-    private func updateChapters(_ chapters: [Chapter]) { guard var value = document else { return }; value.chapters = chapters; value.updatedAt = .now; document = value; memoryBook = nil; persistDocument() }
+    private func updateChapters(_ chapters: [Chapter]) {
+        guard var value = document else { return }
+        let oldChapters = value.storyPlanDraft?.chapters ?? value.chapters
+        let oldByID = Dictionary(uniqueKeysWithValues: oldChapters.map { ($0.id, $0) })
+        let newByID = Dictionary(uniqueKeysWithValues: chapters.map { ($0.id, $0) })
+        let affected = Set(oldByID.keys).union(newByID.keys).filter { oldByID[$0] != newByID[$0] }
+        if var draft = value.storyPlanDraft {
+            draft.replaceChapters(chapters)
+            value.storyPlanDraft = draft
+        } else {
+            value.chapters = chapters
+        }
+        value.updatedAt = .now
+        document = value
+        if var book = memoryBook {
+            book.chapters = chapters
+            _ = book.markPagesNeedsReflow(chapterIDs: Set(affected))
+            book.updatedAt = .now
+            memoryBook = book
+        }
+        persistDocument()
+    }
+
+    private func openEditor(returningTo route: AppRoute, pageID: UUID? = nil) {
+        persistDocument()
+        editorReturnRoute = route
+        editorInitialPageID = pageID
+        bookCheckTarget = nil
+        pushReturnContext(source: route == .finalPreview ? .finalPreview : .bookPreview, pageID: pageID, issue: nil)
+        go(.editor)
+    }
+
+    /// Page-editor Style is a real child return frame, never an editor sheet.
+    /// That makes Apply and Cancel strictly return to the same editor instance
+    /// while preserving the Preview/Check/Final frame below it.
+    private func openEditorStyle() {
+        let pageID = editorInitialPageID ?? previewLogicalPageID ?? finalPreviewLogicalPageID
+        editorStylePageID = pageID
+        pushReturnContext(source: .pageEditorStyle, pageID: pageID, issue: nil)
+        go(.editorStyle)
+    }
+
+    private func finishEditorStyle() {
+        persistDocument()
+        popEditorStyleFrame()
+    }
+
+    private func cancelEditorStyle() {
+        popEditorStyleFrame()
+    }
+
+    private func popEditorStyleFrame() {
+        guard var value = document else { go(.editor); return }
+        _ = value.returnContextStack.pop()
+        document = value
+        persistDocument()
+        go(.editor)
+    }
+
+    private func openBookCheckIssue(_ target: BookCheckNavigationTarget) {
+        editorReturnRoute = .bookCheck
+        bookCheckTarget = target
+        editorInitialPageID = target.issue.pageID
+        bookCheckFocusKey = target.issue.persistenceKey
+        pushReturnContext(source: .bookCheck, pageID: target.issue.pageID, issue: target)
+        go(.editor)
+    }
+
+    private func closeEditor() {
+        persistDocument()
+        bookCheckTarget = nil
+        editorInitialPageID = nil
+        guard var value = document, let frame = value.returnContextStack.pop() else {
+            go(editorReturnRoute)
+            return
+        }
+        document = value
+        if frame.source == .pageEditorStyle { go(.editor); return }
+        checkLatestEditsAndReturn(using: frame)
+    }
     private func persistDocument() {
         guard var value = document else { return }
-        value.memoryBook = memoryBook
+        if var currentBook = memoryBook {
+            if let persistedBook = value.memoryBook,
+               persistedBook != currentBook,
+               persistedBook.documentRevisionID == currentBook.documentRevisionID {
+                currentBook.beginNewRevision()
+                memoryBook = currentBook
+            }
+            value.memoryBook = currentBook
+        } else {
+            value.memoryBook = nil
+        }
         value.updatedAt = .now
         document = value
         Task { try? await container.repository.save(document: value) }
+    }
+
+    private func pushReturnContext(source: ReturnSourceScreen, pageID: UUID?, issue: BookCheckNavigationTarget?) {
+        guard var value = document else { return }
+        let formerPageIndex = pageID.flatMap { id in memoryBook?.pages.firstIndex(where: { $0.id == id }) }
+        let locator = issue.map {
+            BookCheckIssueLocator(ruleID: $0.issue.stableRuleID, pageID: $0.issue.pageID, elementID: $0.issue.elementID, formerIssueIndex: $0.issueIndex)
+        }
+        value.returnContextStack.push(.init(source: source, logicalPageID: pageID, formerPageIndex: formerPageIndex, paperSize: pageSize, issueLocator: locator))
+        document = value
+        persistDocument()
+    }
+
+    @discardableResult
+    private func evaluateAndPersistBookCheck(locator: BookCheckIssueLocator? = nil) -> BookCheckResult? {
+        guard let book = memoryBook, var value = document else { return nil }
+        let result = BookCheckWorkflow.evaluate(book, assetIsAvailable: PhotoAssetAvailability.isAvailable)
+        value.storeBookCheckResult(result)
+        value.memoryBook = book
+        if let locator {
+            let currentIssues = book.checkBook(assetIsAvailable: PhotoAssetAvailability.isAvailable)
+            if let index = BookCheckWorkflow.resolvedIssueIndex(for: locator, in: currentIssues) {
+                bookCheckFocusKey = currentIssues[index].persistenceKey
+            } else {
+                bookCheckFocusKey = nil
+            }
+        }
+        document = value
+        Task { try? await container.repository.save(document: value) }
+        return result
+    }
+
+    private func enterBookCheck() {
+        guard memoryBook != nil else { return }
+        // UI-test fixtures keep the synchronous path so existing deterministic
+        // route assertions still observe an immediate Book Check screen.
+        if isUITestFixtureSession {
+            _ = evaluateAndPersistBookCheck()
+            go(.bookCheck)
+            return
+        }
+        // Production: Book Check evaluation walks every page synchronously and can
+        // freeze a large book (e.g. 75 pages) for noticeable time. Show the
+        // dedicated checking screen immediately, then evaluate off the tap so the
+        // preview never appears stuck. Mirrors `checkLatestEditsAndReturn`.
+        go(.rechecking)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard route == .rechecking else { return }
+            guard memoryBook != nil else { go(.preview); return }
+            _ = evaluateAndPersistBookCheck()
+            guard route == .rechecking else { return }
+            go(.bookCheck)
+        }
+    }
+
+    /// A revision transition may not flash an older Book Check or Final
+    /// Preview. Route through this explicit blocking state, then resolve the
+    /// saved locator/page identity against the new revision.
+    private func checkLatestEditsAndReturn(using frame: ReturnContextFrame) {
+        go(.rechecking)
+        Task { @MainActor in
+            // The short presentation interval is deliberate: it gives VoiceOver,
+            // UI tests, and people a stable, non-bypassable state rather than a
+            // one-frame stale result during synchronous local rule evaluation.
+            try? await Task.sleep(for: .milliseconds(350))
+            guard route == .rechecking else { return }
+            let result = evaluateAndPersistBookCheck(locator: frame.issueLocator)
+            guard result?.status != .blocked else { go(.bookCheck); return }
+            guard let book = memoryBook else { go(.bookCheck); return }
+            let resolvedPageID = BookCheckWorkflow.resolvedPageID(for: frame, in: book)
+            switch frame.source {
+            case .finalPreview:
+                finalPreviewLogicalPageID = resolvedPageID
+                go(.finalPreview)
+            case .bookPreview, .bookCheck:
+                previewLogicalPageID = resolvedPageID
+                go(.preview)
+            case .pageEditorStyle:
+                go(.editor)
+            }
+        }
+    }
+
+    private func continueFromBookCheck() {
+        guard let book = memoryBook, var value = document else { return }
+        let result = value.cachedBookCheckResult(for: book) ?? BookCheckWorkflow.evaluate(book, assetIsAvailable: PhotoAssetAvailability.isAvailable)
+        if value.cachedBookCheckResult(for: book) == nil {
+            value.storeBookCheckResult(result)
+            document = value
+            persistDocument()
+        }
+        guard result.status != .blocked else { return }
+        go((purchased || isPurchaseBypassed) ? .finalPreview : .purchase)
     }
 
     private func ensureMemoryBook() {
@@ -550,6 +970,11 @@ struct MilestoneRootView: View {
             style = saved.style
             pageSize = saved.pageSize
         } else if memoryBook == nil {
+            guard ProcessInfo.processInfo.arguments.contains("-uiTesting") else {
+                operationError = "Choose a book style and paper size before opening the preview."
+                if route != .bookStyle { go(.bookStyle) }
+                return
+            }
             var built = MemoryBookBuilder.build(profile: document.profile, photos: document.photos, chapters: document.chapters, style: style, pageSize: pageSize)
             // UI-only Crop fixtures use the identical editor route with real
             // portrait/landscape and ±15° document geometry. Production data
@@ -633,6 +1058,30 @@ struct MilestoneRootView: View {
                     built.pages[pageIndex].elements[titleIndex].isLayoutLocked = true
                     built.pages[pageIndex].elements[titleIndex].origin = .user
                 }
+                // UI-test-only proof for the reversible Book Check suggestion
+                // workflow. Marking every image as user-reviewed removes crop
+                // blockers, while repeating one photo on a second page creates
+                // one deterministic, non-blocking suggestion.
+                if fixture == "book-check-ignore" {
+                    for pageIndex in built.pages.indices {
+                        for elementIndex in built.pages[pageIndex].elements.indices
+                            where built.pages[pageIndex].elements[elementIndex].kind == .image {
+                            built.pages[pageIndex].elements[elementIndex].origin = .user
+                            built.pages[pageIndex].elements[elementIndex].imageContentMode = .fit
+                        }
+                    }
+                    let photoPages = built.pages.indices.filter { built.pages[$0].kind == .photoSelection }
+                    if let sourcePage = photoPages.first,
+                       let targetPage = photoPages.dropFirst().first,
+                       var repeated = built.pages[sourcePage].elements.first(where: { $0.kind == .image }) {
+                        repeated.id = UUID()
+                        repeated.normalizedFrame = CGRect(x: 0.56, y: 0.54, width: 0.30, height: 0.24)
+                        repeated.origin = .user
+                        repeated.imageContentMode = .fit
+                        repeated.zIndex = (built.pages[targetPage].elements.map(\.zIndex).max() ?? 0) + 1
+                        built.pages[targetPage].elements.append(repeated)
+                    }
+                }
             }
             memoryBook = built
             persistDocument()
@@ -647,36 +1096,46 @@ struct MilestoneRootView: View {
             operationError = nil; scanDisplayState = ""
             var profile = document?.profile ?? PetProfile(id: profileID, name: name, species: species, departureYear: Int(year) ?? 2024, referenceAssetIdentifiers: referenceAssetIdentifiers, albumStyle: style)
             profile.lifecycle = .scanning
-            let priorDocument = document ?? ArchiveDocument(profile: profile)
+            var priorDocument = document ?? ArchiveDocument(profile: profile)
+            priorDocument.profile = profile
+            let generationTransition = RecognitionGenerationCoordinator.transition(
+                for: profile,
+                current: priorDocument.activeRecognitionGeneration
+            )
+            priorDocument = RecognitionGenerationCoordinator.preparing(priorDocument, transition: generationTransition)
             // A completed archive has no active checkpoint. Seed an additive
             // refresh with existing candidates so only genuinely new matches
             // are introduced and prior review decisions remain stable.
-            let resumeCheckpoint = priorDocument.scanCheckpoint
-                ?? ScanArchiveMergePolicy.checkpointForIncrementalRescan(document: priorDocument)
+            let resumeCheckpoint: ScanCheckpoint? = generationTransition.requiresFullRematch
+                ? nil
+                : (priorDocument.scanCheckpoint ?? ScanArchiveMergePolicy.checkpointForIncrementalRescan(document: priorDocument))
             // A resume must keep its saved state visible while reference
             // features are prepared. Resetting these values briefly produced
             // the contradictory "0 photos checked / 114 matches" screen.
-            scanCompletedAssets = resumeCheckpoint.progress.completedAssets
-            scanTotalAssets = resumeCheckpoint.progress.totalAssets
-            scanMatchCount = resumeCheckpoint.candidates.count
+            scanCompletedAssets = resumeCheckpoint?.progress.completedAssets ?? 0
+            scanTotalAssets = resumeCheckpoint?.progress.totalAssets ?? 0
+            scanMatchCount = resumeCheckpoint?.candidates.count ?? 0
             scanProgress = Double(scanCompletedAssets) / Double(max(scanTotalAssets, 1))
-            document = ArchiveDocument(
-                profile: profile,
-                photos: priorDocument.photos,
-                chapters: priorDocument.chapters,
-                scanCheckpoint: resumeCheckpoint,
-                memoryBook: priorDocument.memoryBook,
-                exportRecords: priorDocument.exportRecords,
-                updatedAt: priorDocument.updatedAt
-            )
+            var scanningDocument = priorDocument
+            scanningDocument.profile = profile
+            scanningDocument.scanCheckpoint = resumeCheckpoint
+            scanningDocument.archiveCheckpoint = ArchiveCheckpoint(stage: .scan)
+            document = scanningDocument
             persistDocument()
             do {
                 let photos = try await container.scanner.scan(profile: profile, checkpoint: resumeCheckpoint) { checkpoint in
                     await MainActor.run {
                         guard var current = document, current.id == profile.id else { return }
+                        current = RecognitionGenerationCoordinator.merging(
+                            scanned: checkpoint.candidates,
+                            into: current,
+                            generation: generationTransition.generation
+                        )
                         current.profile.lifecycle = .scanning
-                        current.photos = checkpoint.candidates
-                        current.scanCheckpoint = checkpoint
+                        var durableCheckpoint = checkpoint
+                        let scannedIDs = Set(checkpoint.candidates.map(\.assetLocalIdentifier))
+                        durableCheckpoint.candidates = current.photos.filter { scannedIDs.contains($0.assetLocalIdentifier) }
+                        current.scanCheckpoint = durableCheckpoint
                         current.scanAuditMetrics = checkpoint.auditMetrics
                         current.updatedAt = .now
                         document = current
@@ -693,9 +1152,29 @@ struct MilestoneRootView: View {
                 guard !Task.isCancelled else { return }
                 profile.lifecycle = .ready
                 if let current = document {
-                    document = ScanArchiveMergePolicy.completing(document: current, profile: profile, scanned: photos)
+                    var completed = RecognitionGenerationCoordinator.merging(
+                        scanned: photos,
+                        into: current,
+                        generation: generationTransition.generation
+                    )
+                    completed.profile = profile
+                    completed.scanAuditMetrics = current.scanCheckpoint?.auditMetrics ?? current.scanAuditMetrics
+                    if var checkpoint = current.scanCheckpoint {
+                        let scannedIDs = Set(photos.map(\.assetLocalIdentifier))
+                        checkpoint.candidates = completed.photos.filter { scannedIDs.contains($0.assetLocalIdentifier) }
+                        completed.scanCheckpoint = checkpoint
+                    }
+                    document = completed
                 } else {
-                    document = ArchiveDocument(profile: profile, photos: photos)
+                    document = RecognitionGenerationCoordinator.merging(
+                        scanned: photos,
+                        into: ArchiveDocument(profile: profile),
+                        generation: generationTransition.generation
+                    )
+                }
+                if var completed = document {
+                    completed.archiveCheckpoint = ArchiveCheckpoint(stage: .review)
+                    document = completed
                 }
                 persistDocument(); scanProgress = 1; isScanning = false; scanTask = nil
             } catch {
@@ -743,22 +1222,120 @@ struct MilestoneRootView: View {
         scanTask?.cancel()
     }
 
-    private func createTimeline() {
-        guard var document else { return }
+    private var draftSummary: MemoryBookDraftSummary {
+        MemoryBookBuilder.analyze(photos: document?.photos ?? [])
+    }
+
+    private func beginSmartDraft() {
+        guard draftSummary.selectedPhotoCount >= 3 else {
+            smartDraftError = "Choose at least 3 confirmed photos before creating a memory book."
+            go(.confirm)
+            return
+        }
+        smartDraftError = nil
+        guard var value = document else { return }
+        value.storyPlanDraft = makeStoryPlanDraft(from: value, simple: false)
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: .smartDraft, smartDraftStepCursor: "complete")
+        value.updatedAt = .now
+        isPreparingSmartDraft = true
+        Task { @MainActor in
+            do {
+                try await container.repository.save(document: value)
+                document = value
+                go(.smartDraft)
+            } catch {
+                smartDraftError = error.localizedDescription
+                isPreparingSmartDraft = false
+                return
+            }
+            // The current deterministic planner is intentionally local and
+            // fast. Keep a short, cancellable presentation interval so the UI
+            // communicates what happened without pretending to scan again.
+            try? await Task.sleep(for: .milliseconds(450))
+            guard route == .smartDraft else { return }
+            isPreparingSmartDraft = false
+        }
+    }
+
+    private func makeStoryPlanDraft(from document: ArchiveDocument, simple: Bool) -> StoryPlanDraft {
         let chosen = document.photos.filter(\.isEligibleForArchive)
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: chosen) { photo in
             (photo.localDateRange?.start ?? photo.createdAt).map { calendar.component(.year, from: $0) } ?? document.profile.departureYear
         }
-        document.chapters = grouped.keys.sorted().enumerated().map { index, year in
+        var chapters = grouped.keys.sorted().enumerated().map { index, year in
             Chapter(id: UUID(), title: "Days together", dateLabel: String(year), photoIDs: grouped[year, default: []].map(\.id), isHidden: false, sortOrder: index)
         }
-        if document.chapters.isEmpty { document.chapters = [Chapter(id: UUID(), title: "Days together", dateLabel: String(document.profile.departureYear), photoIDs: [], isHidden: false, sortOrder: 0)] }
-        self.document = document; memoryBook = nil; persistDocument(); go(.timeline)
+        if chapters.isEmpty { chapters = [Chapter(id: UUID(), title: "Days together", dateLabel: String(document.profile.departureYear), photoIDs: [], isHidden: false, sortOrder: 0)] }
+        var draft = StoryPlanDraft.migrating(profile: document.profile, photos: chosen, chapters: chapters, sourceMatchGenerationID: document.activeRecognitionGeneration?.matchGenerationID)
+        draft.state = .generated
+        draft.createdAt = .now
+        draft.updatedAt = .now
+        draft.confirmedAt = nil
+        if simple { draft.duplicateGroups = [] }
+        return draft
+    }
+
+    private func continueToStoryPlan() {
+        guard let value = document, value.storyPlanDraft != nil else { return }
+        commit(value, checkpoint: .storyPlan, route: .timeline)
+    }
+
+    private func useSimpleTimeline() {
+        guard var value = document else { return }
+        value.storyPlanDraft = makeStoryPlanDraft(from: value, simple: true)
+        commit(value, checkpoint: .storyPlan, route: .timeline)
+    }
+
+    private func confirmStoryPlan() {
+        guard var value = document, var draft = value.storyPlanDraft else { return }
+        draft.replaceChapters(draft.chapters, state: .confirmed)
+        value.storyPlanDraft = draft
+        commit(value, checkpoint: .stylePending, route: .bookStyle)
+    }
+
+    private func applySelectedBookStyle(_ mode: MemoryBookTemplateApplicationMode) {
+        guard !isCreatingBook, var value = document, let draft = value.storyPlanDraft, draft.state == .confirmed else { return }
+        isCreatingBook = true
+        operationError = nil
+        if var book = value.memoryBook ?? memoryBook {
+            book.applyTemplate(style: style, mode: mode)
+            if book.pageSize != pageSize { book.pageSize = pageSize }
+            book.beginNewRevision()
+            value.memoryBook = book
+        } else {
+            let chapters = draft.chapters
+            let book = MemoryBookBuilder.build(profile: value.profile, photos: value.photos, chapters: chapters, style: style, pageSize: pageSize)
+            value.chapters = chapters
+            value.memoryBook = book
+        }
+        value.profile.albumStyle = style
+        value.archiveCheckpoint = ArchiveCheckpoint(stage: .documentReady)
+        value.updatedAt = .now
+        Task { @MainActor in
+            defer { isCreatingBook = false }
+            do {
+                try await container.repository.save(document: value)
+                document = value
+                memoryBook = value.memoryBook
+                go(.preview)
+            } catch { operationError = error.localizedDescription }
+        }
+    }
+
+    @MainActor
+    private func loadProductPrice() async {
+        guard !isLoadingProductPrice else { return }
+        isLoadingProductPrice = true
+        productPriceLoadFailed = false
+        defer { isLoadingProductPrice = false }
+        let price = await container.purchase.unlockDisplayPrice()
+        productDisplayPrice = price
+        productPriceLoadFailed = price == nil
     }
 
     private func purchase() {
-        guard !isPurchasing else { return }
+        guard !isPurchasing, productDisplayPrice != nil else { return }
         Task {
             isPurchasing = true
             defer { isPurchasing = false }
@@ -768,17 +1345,21 @@ struct MilestoneRootView: View {
                 switch try await container.purchase.purchaseUnlock() {
                 case .entitled, .restored:
                     purchased = true
-                    go(.export)
+                    go(.finalPreview)
                 case .pending:
                     purchaseNotice = "Your purchase is pending approval. Your album and edits are still here."
+                    go(.bookCheck)
                 case .cancelled:
                     purchaseNotice = "Purchase cancelled. Your album and edits are still here."
+                    go(.bookCheck)
                 case .failed(let message):
                     operationError = message
+                    go(.bookCheck)
                 case .idle, .purchasing:
                     operationError = "Purchase could not be completed. Please try again."
+                    go(.bookCheck)
                 }
-            } catch { operationError = error.localizedDescription }
+            } catch { operationError = error.localizedDescription; go(.bookCheck) }
         }
     }
     private func restorePurchase() {
@@ -792,14 +1373,20 @@ struct MilestoneRootView: View {
                 let state = try await container.purchase.restorePurchases()
                 if state == .restored || state == .entitled {
                     purchased = true
-                    go(.export)
+                    go(.finalPreview)
                 } else {
                     operationError = "No previous Tailor purchase was found for this Apple ID."
+                    go(.bookCheck)
                 }
-            } catch { operationError = error.localizedDescription }
+            } catch { operationError = error.localizedDescription; go(.bookCheck) }
         }
     }
     private func exportPDF() {
+        guard hasCurrentBookCheckPass else {
+            operationError = "This revision must pass Book Check before export."
+            enterBookCheck()
+            return
+        }
         guard let document else {
             operationError = "The archive could not be found. Return to the timeline and try again."
             return
@@ -851,14 +1438,6 @@ struct MilestoneRootView: View {
         }
     }
     private func cancelExport() { exportTask?.cancel() }
-    private func exportVideo() {
-        guard let document else { operationError = "The archive could not be found. Return to the timeline and try again."; return }
-        Task { @MainActor in
-            operationError = nil
-            do { videoURL = try await container.videoExporter.export(profile: document.profile, photos: document.photos, chapters: document.chapters, duration: 30) }
-            catch { operationError = error.localizedDescription }
-        }
-    }
     private func updateAlbumStyle() {
         guard var current = document else { return }
         current.profile.albumStyle = style
@@ -867,10 +1446,17 @@ struct MilestoneRootView: View {
     }
     private func updateBookPageSize(_ newSize: PDFPageSize) {
         guard var book = memoryBook else { return }
+        guard book.pageSize != newSize else { return }
         book.pageSize = newSize
-        book.updatedAt = .now
+        book.beginNewRevision()
         memoryBook = book
         persistDocument()
+        if route == .finalPreview || route == .preview {
+            let source: ReturnSourceScreen = route == .finalPreview ? .finalPreview : .bookPreview
+            let selected = route == .finalPreview ? finalPreviewLogicalPageID : previewLogicalPageID
+            let formerIndex = selected.flatMap { id in memoryBook?.pages.firstIndex(where: { $0.id == id }) }
+            checkLatestEditsAndReturn(using: .init(source: source, logicalPageID: selected, formerPageIndex: formerIndex, paperSize: newSize, issueLocator: nil))
+        }
     }
     /// A completed archive can be refreshed without replacing its user choices.
     /// `startScan` seeds the scanner with an incremental checkpoint and merge policy.
@@ -880,12 +1466,13 @@ struct MilestoneRootView: View {
         startScan()
     }
 
-    private func restartArchive() { scanTask?.cancel(); scanTask = nil; isScanning = false; profileID = UUID(); name = ""; species = .dog; year = String(Calendar.current.component(.year, from: .now)); referenceAssetIdentifiers = []; document = nil; exportURL = nil; scanProgress = 0; route = .welcome; container.router.reset() }
+    private func restartArchive() { scanTask?.cancel(); scanTask = nil; isScanning = false; profileID = UUID(); name = ""; species = .dog; arrivalYear = ""; year = String(Calendar.current.component(.year, from: .now)); referenceAssetIdentifiers = []; document = nil; memoryBook = nil; manualImportMode = false; exportURL = nil; scanProgress = 0; route = .welcome; container.router.reset() }
     private func deleteArchive() {
         let id = profileID
         Task {
             try? await container.repository.deleteArchive(id: id)
             await container.scanner.deleteLocalIndex(profileID: id)
+            try? ManualAssetStore.deleteCopies(profileID: id)
             let prefix = "\(id.uuidString)-life-archive"
             let urls = (try? FileManager.default.contentsOfDirectory(at: .documentsDirectory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
             for url in urls where url.lastPathComponent.hasPrefix(prefix) && url.pathExtension.lowercased() == "pdf" {

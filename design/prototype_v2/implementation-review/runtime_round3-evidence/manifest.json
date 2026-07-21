@@ -1,0 +1,143 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "DB937560-B824-453C-B4E3-6F19A4697B3E.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-purchase-transaction-failed_0_E08F85BE-1035-4623-A60E-4F59B824C6F4.png",
+        "timestamp" : 1784564455.426
+      }
+    ],
+    "testIdentifier" : "TailorOnboardingUITests/testPurchaseFailurePreservesTheUnlockScreenAndRestorePath()",
+    "testIdentifierURL" : "test://com.apple.xcode/Tailor/TailorUITests/TailorOnboardingUITests/testPurchaseFailurePreservesTheUnlockScreenAndRestorePath"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "EBD3F59B-55B4-40F7-AEA9-F9D7E55FC5AC.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "App UI hierarchy for com.tailor_0_4D99E3E5-F17A-48E2-82FB-35D6F27F1DCC.prototype",
+        "timestamp" : 1784564463.965
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "9467A630-7A09-4B19-8BDC-CAFCBA9DCDCA",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "UI Snapshot 2026-07-21 at 12.21.03 上午",
+        "timestamp" : 1784564463.965
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "824B7BA7-BA26-4BB5-8B24-6C30723ED280.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Debug description for `\"Confirm ignore Book Check suggestion\" Button`_0_AEB12C0D-D97A-4D7F-81AB-BEDCD8B8A35E.txt",
+        "timestamp" : 1784564463.909
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "FA847955-DDCF-44C8-9734-29EE9BDD43B4.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Debug description for `\"Confirm ignore Book Check suggestion\" Button`_0_65C18A1F-7A36-4503-B85F-91B0A8A06793.txt",
+        "timestamp" : 1784564462.981
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "F6F4FBB7-3C3F-4893-9012-F2ED93C1E645.txt",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Debug description for `\"Confirm ignore Book Check suggestion\" Button`_0_BA8A342D-807B-4253-BEC2-3B986058737F.txt",
+        "timestamp" : 1784564461.978
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "AB6CE388-3547-4A0B-999A-393EC5981613",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-07-21 at 12.21.00 上午",
+        "timestamp" : 1784564460.853
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "D898DC64-58F3-4E16-8194-0C8412C21DC9.mp4",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Screen Recording 2026-07-21 at 12.20.55 上午.mp4",
+        "timestamp" : 1784564455.69
+      }
+    ],
+    "testIdentifier" : "TailorOnboardingUITests/testRound3BookCheckIgnoreConfirmationEvidence()",
+    "testIdentifierURL" : "test://com.apple.xcode/Tailor/TailorUITests/TailorOnboardingUITests/testRound3BookCheckIgnoreConfirmationEvidence"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "A6803434-5855-472F-86D8-8F7B454D887C.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-preview-return-page-3_0_6E20A5ED-8751-4E5C-A687-069178098459.png",
+        "timestamp" : 1784564474.678
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "8CAFB49D-5036-4A89-8B9F-4836FBCEAFD7.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-editor-page-3_0_CD6AC937-FE98-41B1-82D9-966EC5FF91EE.png",
+        "timestamp" : 1784564473.11
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "6C14D68E-14D0-4635-ABDE-477381E48F1E.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-preview-page-3_0_4B0FF88F-AB4A-4E71-AD95-9B0D8509CDCD.png",
+        "timestamp" : 1784564471.529
+      }
+    ],
+    "testIdentifier" : "TailorOnboardingUITests/testRound3PreviewEditorReturnsToSameLogicalPageEvidence()",
+    "testIdentifierURL" : "test://com.apple.xcode/Tailor/TailorUITests/TailorOnboardingUITests/testRound3PreviewEditorReturnsToSameLogicalPageEvidence"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "7D033207-14FA-4F58-AFD3-08DCC8F1F1E7.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-story-plan-impact-summary_0_EF667220-1EB3-4EB8-927F-7EF2362739D2.png",
+        "timestamp" : 1784564483.176
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "C45032E0-483C-4EC5-B520-A670FE53394A.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-round3-story-plan-merge-confirmation_0_FC4030AE-EA2A-437F-A0BD-75F5C919F2FD.png",
+        "timestamp" : 1784564481.402
+      }
+    ],
+    "testIdentifier" : "TailorOnboardingUITests/testStoryPlanMergeConfirmsImpactAndShowsResultSummary()",
+    "testIdentifierURL" : "test://com.apple.xcode/Tailor/TailorUITests/TailorOnboardingUITests/testStoryPlanMergeConfirmsImpactAndShowsResultSummary"
+  }
+]

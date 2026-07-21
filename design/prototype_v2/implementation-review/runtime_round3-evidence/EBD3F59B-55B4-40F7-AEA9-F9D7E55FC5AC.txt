@@ -1,0 +1,63 @@
+Application, 0x115054dc0, pid: 24477, label: 'Tailor' <App element pid: 24477>
+  Window (Main), 0x115055040, {{0.0, 0.0}, {402.0, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4360587264.4>
+    Other, 0x115055180, {{0.0, 0.0}, {402.0, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4438356992.5>
+      Other, 0x1150552c0, {{0.0, 0.0}, {402.0, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4437949440.6>
+        Other, 0x115055400, {{0.0, 0.0}, {402.0, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4360586240.7>
+          Other, 0x115055540, {{0.0, 0.0}, {402.0, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4437710528.8>
+            ScrollView, 0x115055680, {{0.0, 0.0}, {402.3, 874.0}} <AX element pid: 24477, elementOrHash.elementID: 4360408064.9>
+              Other, 0x1150557c0, {{0.0, 62.0}, {402.3, 1524.3}} <AX element pid: 24477, elementOrHash.elementID: 4609871360.11>
+                Button, 0x115055900, {{39.7, 87.7}, {12.7, 16.7}}, identifier: 'chevron.left', label: 'Back' <AX element pid: 24477, elementOrHash.elementID: 4361534784.15>
+                StaticText, 0x115055a40, {{284.3, 87.3}, {94.0, 17.3}}, label: 'BOOK CHECK' <AX element pid: 24477, elementOrHash.elementID: 4361527168.16>
+                StaticText, 0x115055b80, {{24.0, 134.0}, {243.0, 98.3}}, label: 'A few pages need attention.' <AX element pid: 24477, elementOrHash.elementID: 4437637120.17>
+                StaticText, 0x115055cc0, {{70.5, 292.2}, {27.0, 32.3}}, label: '37' <AX element pid: 24477, elementOrHash.elementID: 4361642304.18>
+                StaticText, 0x115055e00, {{144.0, 284.3}, {132.7, 24.3}}, label: 'Export is paused' <AX element pid: 24477, elementOrHash.elementID: 4361701120.19>
+                StaticText, 0x115055f40, {{144.0, 313.7}, {161.7, 18.7}}, label: '3 blocking · 3 suggestions' <AX element pid: 24477, elementOrHash.elementID: 4361703360.20>
+                Button, 0x115056080, {{39.7, 398.3}, {323.7, 124.3}}, label: 'Needs attention, This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export., Page 1 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437673728.21>
+                  Image, 0x1150561c0, {{39.7, 399.3}, {17.7, 16.0}}, identifier: 'exclamationmark.triangle.fill', label: 'Warning' <AX element pid: 24477, elementOrHash.elementID: 4361706944.34>
+                  StaticText, 0x115056300, {{71.0, 398.3}, {96.7, 17.3}}, label: 'Needs attention' <AX element pid: 24477, elementOrHash.elementID: 4361709632.35>
+                  StaticText, 0x115056440, {{71.0, 419.7}, {238.7, 81.7}}, label: 'This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export.' <AX element pid: 24477, elementOrHash.elementID: 4437672384.36>
+                  StaticText, 0x115056580, {{71.0, 505.3}, {136.3, 17.3}}, label: 'Page 1 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437672832.37>
+                  Image, 0x1150566c0, {{355.0, 399.3}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437673280.38>
+                Button, 0x115056800, {{39.7, 574.7}, {323.7, 124.3}}, label: 'Needs attention, This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export., Page 4 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437676864.22>
+                  Image, 0x115056940, {{39.7, 575.7}, {17.7, 16.0}}, identifier: 'exclamationmark.triangle.fill', label: 'Warning' <AX element pid: 24477, elementOrHash.elementID: 4437674176.39>
+                  StaticText, 0x115056a80, {{71.0, 574.7}, {96.7, 17.3}}, label: 'Needs attention' <AX element pid: 24477, elementOrHash.elementID: 4437674624.40>
+                  StaticText, 0x115056bc0, {{71.0, 596.0}, {238.7, 81.7}}, label: 'This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export.' <AX element pid: 24477, elementOrHash.elementID: 4437675072.41>
+                  StaticText, 0x115056d00, {{71.0, 681.7}, {138.3, 17.3}}, label: 'Page 4 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437675520.42>
+                  Image, 0x115056e40, {{355.0, 575.7}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437676416.43>
+                Button, 0x115056f80, {{40.0, 751.0}, {323.3, 82.3}}, label: 'Suggestion, Text contrast is low (1.0:1). Use a clearer color for more readable print., Page 5 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437679552.23>
+                  Image, 0x1150570c0, {{40.0, 752.0}, {11.3, 19.3}}, identifier: 'lightbulb.fill', label: 'Lightbulb' <AX element pid: 24477, elementOrHash.elementID: 4437677312.44>
+                  StaticText, 0x115057200, {{65.3, 751.0}, {68.7, 17.3}}, label: 'Suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437677760.45>
+                  StaticText, 0x115057340, {{65.3, 772.3}, {247.7, 39.7}}, label: 'Text contrast is low (1.0:1). Use a clearer color for more readable print.' <AX element pid: 24477, elementOrHash.elementID: 4437678208.46>
+                  StaticText, 0x115057480, {{65.3, 816.0}, {138.3, 17.3}}, label: 'Page 5 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437678656.47>
+                  Image, 0x1150575c0, {{355.0, 752.0}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437679104.48>
+                Button, 0x115057700, {{38.0, 855.3}, {167.7, 17.3}}, label: 'Keep and ignore suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437680000.24>
+                Button, 0x115057840, {{39.7, 910.7}, {323.7, 124.3}}, label: 'Needs attention, This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export., Page 6 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437683136.25>
+                  Image, 0x115057980, {{39.7, 911.7}, {17.7, 16.0}}, identifier: 'exclamationmark.triangle.fill', label: 'Warning' <AX element pid: 24477, elementOrHash.elementID: 4437680448.49>
+                  StaticText, 0x115057ac0, {{71.0, 910.7}, {96.7, 17.3}}, label: 'Needs attention' <AX element pid: 24477, elementOrHash.elementID: 4437680896.50>
+                  StaticText, 0x115057c00, {{71.0, 932.0}, {238.7, 81.7}}, label: 'This automatic frame crops about 37% of the photo and no subject focus is available. Open Crop and confirm the framing before export.' <AX element pid: 24477, elementOrHash.elementID: 4437681344.51>
+                  StaticText, 0x115057d40, {{71.0, 1017.7}, {138.3, 17.3}}, label: 'Page 6 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437682240.52>
+                  Image, 0x115057e80, {{355.0, 911.7}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437682688.53>
+                Button, 0x105243480, {{40.0, 1087.0}, {323.3, 103.3}}, label: 'Suggestion, This photo appears more than once (on 3 pages). Keep the repetition only if it is intentional., Page 4 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437686272.26>
+                  Image, 0x1052435c0, {{40.0, 1088.0}, {11.3, 19.3}}, identifier: 'lightbulb.fill', label: 'Lightbulb' <AX element pid: 24477, elementOrHash.elementID: 4437684032.54>
+                  StaticText, 0x105243700, {{65.3, 1087.0}, {68.7, 17.3}}, label: 'Suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437684480.55>
+                  StaticText, 0x105243840, {{65.3, 1108.3}, {244.7, 60.7}}, label: 'This photo appears more than once (on 3 pages). Keep the repetition only if it is intentional.' <AX element pid: 24477, elementOrHash.elementID: 4437684928.56>
+                  StaticText, 0x105243980, {{65.3, 1173.0}, {138.3, 17.3}}, label: 'Page 4 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437685376.57>
+                  Image, 0x105243ac0, {{355.0, 1088.0}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437685824.58>
+                Button, 0x105243c00, {{38.0, 1212.3}, {167.7, 17.3}}, label: 'Keep and ignore suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437687168.27>
+                Button, 0x105243d40, {{40.0, 1267.7}, {323.3, 103.3}}, label: 'Suggestion, This photo appears more than once (on 2 pages). Keep the repetition only if it is intentional., Page 6 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437706496.28>
+                  Image, 0x105243e80, {{40.0, 1268.7}, {11.3, 19.3}}, identifier: 'lightbulb.fill', label: 'Lightbulb' <AX element pid: 24477, elementOrHash.elementID: 4437687616.59>
+                  StaticText, 0x115070000, {{65.3, 1267.7}, {68.7, 17.3}}, label: 'Suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437704704.60>
+                  StaticText, 0x115070140, {{65.3, 1289.0}, {244.3, 60.7}}, label: 'This photo appears more than once (on 2 pages). Keep the repetition only if it is intentional.' <AX element pid: 24477, elementOrHash.elementID: 4437705152.61>
+                  StaticText, 0x115070280, {{65.3, 1353.7}, {138.3, 17.3}}, label: 'Page 6 · Open in editor' <AX element pid: 24477, elementOrHash.elementID: 4437705600.62>
+                  Image, 0x1150703c0, {{355.0, 1268.7}, {8.3, 14.7}}, identifier: 'chevron.right', label: 'Forward' <AX element pid: 24477, elementOrHash.elementID: 4437706048.63>
+                Button, 0x115070500, {{38.0, 1393.0}, {167.7, 17.3}}, label: 'Keep and ignore suggestion' <AX element pid: 24477, elementOrHash.elementID: 4437706944.29>
+                Image, 0x115070640, {{47.0, 1451.3}, {14.0, 17.0}}, identifier: 'lock.shield', label: 'lock.shield' <AX element pid: 24477, elementOrHash.elementID: 4437707392.30>
+                StaticText, 0x115070780, {{80.0, 1450.3}, {190.0, 23.3}}, label: 'Checked before payment' <AX element pid: 24477, elementOrHash.elementID: 4437707840.31>
+                StaticText, 0x1150708c0, {{80.0, 1477.7}, {282.3, 60.7}}, label: 'Book Check inspects the complete document. Purchasing never hides a layout problem or changes your pages.' <AX element pid: 24477, elementOrHash.elementID: 4437708288.32>
+              Other, 0x115070a00, {{369.0, 62.0}, {30.0, 690.0}}, label: 'Vertical scroll bar, 3 pages', value: 0% <AX element pid: 24477, elementOrHash.elementID: 4609877504.12>
+                Other, 0x115070b40, {{396.0, 65.0}, {3.0, 350.0}} <AX element pid: 24477, elementOrHash.elementID: 4361752512.33>
+              Other, 0x115070c80, {{369.0, 62.0}, {30.0, 690.0}}, label: 'Vertical scroll bar, 3 pages', value: 0% <AX element pid: 24477, elementOrHash.elementID: 4609877504.12>
+                Other, 0x115070dc0, {{396.0, 65.0}, {3.0, 350.0}} <AX element pid: 24477, elementOrHash.elementID: 4361752512.33>
+            Button, 0x115070f00, {{24.0, 772.0}, {354.0, 56.0}}, label: 'Review blocking issues' <AX element pid: 24477, elementOrHash.elementID: 4437710080.10>
+              StaticText, 0x115071040, {{44.0, 788.3}, {174.7, 23.3}}, label: 'Review blocking issues' <AX element pid: 24477, elementOrHash.elementID: 4437709184.13>
+              Image, 0x115071180, {{341.0, 794.0}, {15.0, 12.3}}, identifier: 'arrow.right', label: 'Right' <AX element pid: 24477, elementOrHash.elementID: 4437709632.14>

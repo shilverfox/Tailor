@@ -1,0 +1,79 @@
+{
+  "scope": "Warm Paper approved baseline source contract",
+  "status": "pass",
+  "checkedCount": 14,
+  "errorCount": 0,
+  "errors": [],
+  "entries": [
+    {
+      "paper": "letter",
+      "pageKind": "cover",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "dedication",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "contents",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "chapterOpener",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "photoSelection",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "milestone",
+      "errors": []
+    },
+    {
+      "paper": "letter",
+      "pageKind": "closing",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "cover",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "dedication",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "contents",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "chapterOpener",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "photoSelection",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "milestone",
+      "errors": []
+    },
+    {
+      "paper": "a4",
+      "pageKind": "closing",
+      "errors": []
+    }
+  ]
+}

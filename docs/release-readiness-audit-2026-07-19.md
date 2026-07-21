@@ -19,15 +19,15 @@ The app builds and the core archive journey is implemented, but required release
 | Area | Result | Evidence |
 | --- | --- | --- |
 | Unit/model tests | PASS | 89 tests, 0 failures; `artifacts/visual-qa/current-audit/EditorM4-tools-full-unit.xcresult` |
-| Latest editor unit/model tests | PASS | 107 tests, 0 failures, 0 skipped; `artifacts/visual-qa/current-audit/EditorM7-full-unit-r5.xcresult` |
+| Latest editor unit/model tests | PASS | 108 tests, 0 failures, 0 skipped; `artifacts/visual-qa/current-audit/EditorM7-full-unit-r7.xcresult` |
 | Full UI regression | PASS | 44 tests, 0 failures; `artifacts/visual-qa/current-audit/TailorUITests-after-fixes.xcresult` |
 | Decoration editor UI | PASS | Add/design/resize affordance/layer visibility/Undo; `artifacts/visual-qa/current-audit/EditorM3-decoration-ui-polished.xcresult` |
 | Page background UI | PASS | Curated background preview, atomic Apply/Undo and shared paper-color readback; `artifacts/visual-qa/current-audit/EditorM3-background-ui.xcresult` |
 | Photo appearance UI | PASS | Mask/border/shadow/preset persisted as one undoable change; `artifacts/visual-qa/current-audit/EditorM4-appearance-ui-r9.xcresult` |
 | Photo geometry/finishing UI | PASS | Flip selected state, straighten, conservative Auto Enhance, atomic Apply/Undo; `artifacts/visual-qa/current-audit/EditorM4-geometry-auto-ui-r10.xcresult` |
 | Generic iOS Release build | PASS | Unsigned Release build completed successfully |
-| Latest editor Release build | PASS | Unsigned iphoneos Release completed in `artifacts/build/EditorM7-Crop-Gate-Release`; Debug QA route/diagnostic markers are absent |
-| Real-PhotoKit PDF preflight | PARTIAL PASS | Four unique PhotoKit inputs traversed Editor → Reader → six-page Letter PDF; grid photos are 300 PPI and every page was inspected. Simulator Vision cannot validate focal crop and one portrait subject is visibly lost without metadata; current code now blocks that severe unreviewed crop before export, proven by `EditorM7-real-photo-crop-gate-ui-r25.xcresult`. |
+| Latest editor Release build | PASS | Unsigned iphoneos Release completed in `artifacts/build/EditorM7-Fit-Crop-Release`; Debug QA route/diagnostic markers are absent |
+| Real-PhotoKit PDF preflight | PARTIAL PASS | Four unique PhotoKit inputs traversed Editor → Reader → six-page Letter PDF. Severe no-focal crops block first; Full Photo preserves the cat, the white-dog crop is reviewed, and the inspected r40 PDF uses correct physical portrait aspect with no lost subjects or blank edges. Simulator Vision/on-device focal inference and A4 device evidence remain unvalidated. |
 | Debug simulator build | PASS | Built for the dedicated iPhone 13 simulator |
 | Previously failing UI paths | PASS after fixes | 5/5 targeted reruns passed: scan resilience, insufficient preview, text focus/dirty exit, direct text drag/undo, Unicode paste boundaries |
 | Runtime visual capture | CAPTURED | 13 route screenshots in `artifacts/visual-qa/current-audit/normalized/` |
@@ -57,7 +57,7 @@ The app builds and the core archive journey is implemented, but required release
 | Release-only hardening | FIXED in this audit: Release now always selects production composition and `configureUITestDemoIfRequested()` compiles to `false`; the rebuilt Release executable contains no `-uiTesting`/`-uiDemoRoute` markers. A signed-archive smoke test is still required. | Signed archived-binary inspection and smoke test confirm no fixture route can be entered. |
 | Product identity/signing | Bundle ID is `com.tailor.prototype`, version is `0.1 (1)`, and no signed archive/App Store validation was performed. | Final bundle ID/version/team/provisioning, signed archive, Organizer validation, TestFlight install. |
 | Core recognition quality | Scanner thresholds are documented in source as conservative, uncalibrated starting points. | Labelled real-device acceptance set, precision/recall targets, false-positive review, thermal/memory/time measurements across supported devices. |
-| Core editor quality | Precision canvas, arrangement/layers, appearance, non-destructive finishing, typography, guided checks and focal-aware initial crop are implemented. The latest suite passes 107/107; a real-PhotoKit simulator flow and balanced 2×2 PDF pass, with all grid photos embedded at 300 PPI. Book Check evaluates actual print PPI and blocks severe unreviewed crops without focal metadata. Mantis remains a documented v1 no-go. Physical-device focal/aesthetic validation, multilingual print evidence and named approval remain open. | Complete the remaining M7 gates in `docs/editor-capability-audit-2026-07-19.md` and `docs/editor-prototype-conformance-audit-2026-07-20.md`. |
+| Core editor quality | Precision canvas, arrangement/layers, appearance, non-destructive finishing, typography, guided checks and focal-aware initial crop are implemented. The latest suite passes 108/108; a real-PhotoKit simulator repair/export flow and inspected Letter PDF pass. Book Check evaluates print PPI, blocks severe unreviewed crops, and offers Crop/Full Photo/frame recovery. Mantis remains a documented v1 no-go. Physical-device focal/aesthetic validation, multilingual print evidence and named approval remain open. | Complete the remaining M7 gates in `docs/editor-capability-audit-2026-07-19.md` and `docs/editor-prototype-conformance-audit-2026-07-20.md`. |
 
 ### P1 — product-completeness blockers
 

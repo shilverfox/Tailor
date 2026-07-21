@@ -1,0 +1,44 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "3C9A1B31-9633-4D41-8A55-BA7002EE2A36.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-editor-text-photo-role-add_0_0827DEC5-5BDD-4F9F-B27C-AF5393195D87.png",
+        "timestamp" : 1784563990.057
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "0C346893-BC47-4B5C-81E3-BB924E2BE592.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-editor-text-sheet-photo_0_4A5413A3-C8AE-4E01-8CDD-EDB9781310EE.png",
+        "timestamp" : 1784563986.723
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "70C3305B-2ACD-417F-8D3A-4B9406A380EA.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-editor-text-cover-whitelist_0_E89C8251-66C5-4844-8438-6937DE06F77B.png",
+        "timestamp" : 1784563979.582
+      },
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "41F93DB0-C75A-4044-BD9D-C7D90D00FE9B",
+        "deviceName" : "iPhone 17 Pro",
+        "exportedFileName" : "5697D264-A9AB-4F26-9B38-D73A94609FEB.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Tailor-editor-text-sheet-cover_0_9400503C-015B-40D4-B81D-17B526F80AC9.png",
+        "timestamp" : 1784563977.81
+      }
+    ],
+    "testIdentifier" : "TailorOnboardingUITests/testEditorTextUsesWhitelistedFieldsAndRoleSpecificAdd()",
+    "testIdentifierURL" : "test://com.apple.xcode/Tailor/TailorUITests/TailorOnboardingUITests/testEditorTextUsesWhitelistedFieldsAndRoleSpecificAdd"
+  }
+]
