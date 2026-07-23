@@ -9,15 +9,19 @@ enum PhotoAssetAvailability {
         if ManualAssetStore.isAvailable(identifier: photo.assetLocalIdentifier) { return true }
         // UI automation uses deterministic identifiers instead of a developer's
         // Photos library. Production identifiers always resolve through Photos.
+        #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("-uiTesting"), (photo.assetLocalIdentifier.hasPrefix("ui-") || photo.assetLocalIdentifier.hasPrefix("fixture-photo-")) { return true }
+        #endif
         return PHAsset.fetchAssets(withLocalIdentifiers: [photo.assetLocalIdentifier], options: nil).count == 1
     }
 }
 
 enum PhotoAssetImageLoader {
     static func image(identifier: String, targetSize: CGSize = CGSize(width: 1_200, height: 1_200)) async -> UIImage? {
+        #if DEBUG
         if let fixture = MemoryBookVisualQAAsset.image(identifier: identifier) { return fixture }
+        #endif
         if let manual = ManualAssetStore.image(identifier: identifier) { return manual }
         return await Task.detached(priority: .userInitiated) {
             let result = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
@@ -237,11 +241,13 @@ struct PhotoAssetThumbnail: View {
         // markers, so visual evidence can prove crop/rotation behavior rather
         // than showing the generic missing-photo placeholder.
         guard let asset = fetched.firstObject else {
+            #if DEBUG
             if let fixture = localCropFixture(identifier: identifier) {
                 let processed = MemoryBookImageProcessor.process(fixture, treatment: treatment, adjustments: adjustments)
                 ThumbnailImageCache.shared.insert(processed, for: renderKey)
                 image = processed
             }
+            #endif
             return
         }
         let options = PHImageRequestOptions()
@@ -272,7 +278,11 @@ struct PhotoAssetThumbnail: View {
     }
 
     private func localCropFixture(identifier: String) -> UIImage? {
+        #if DEBUG
         MemoryBookVisualQAAsset.image(identifier: identifier)
+        #else
+        nil
+        #endif
     }
 }
 

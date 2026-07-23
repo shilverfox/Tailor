@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1160" viewBox="0 0 1600 1160">
+  <title>APPROVED · Final Preview · Share current page</title>
+  <rect width="1600" height="1160" fill="#E8E4DC"/>
+  <text x="64" y="64" fill="#183A31" font-family="Iowan Old Style, Georgia, serif" font-size="38">Final Preview · Share current page</text>
+  <text x="64" y="98" fill="#64756C" font-family="Helvetica, Arial, sans-serif" font-size="16">Approved interaction and visual states · 390 × 844 pt reference</text>
+
+  <defs>
+    <filter id="shadow"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#183A31" flood-opacity=".14"/></filter>
+    <g id="paper-page">
+      <rect x="66" y="160" width="258" height="334" rx="5" fill="#EFE4D1"/>
+      <rect x="73" y="167" width="244" height="320" rx="4" fill="#F8F3E8"/>
+      <text x="92" y="205" fill="#183A31" font-family="Iowan Old Style, Georgia, serif" font-size="18">Milo</text>
+      <text x="92" y="228" fill="#64756C" font-family="Helvetica, Arial, sans-serif" font-size="10">A life in moments</text>
+      <rect x="92" y="254" width="206" height="145" rx="2" fill="#D8DFCB"/>
+      <circle cx="195" cy="321" r="30" fill="#B85639" opacity=".65"/>
+      <path d="M92 420h42" stroke="#B85639" stroke-width="2"/>
+    </g>
+    <g id="topbar">
+      <text x="28" y="42" fill="#183A31" font-family="Helvetica" font-size="16">‹</text>
+      <text x="132" y="42" fill="#183A31" font-family="Helvetica" font-size="12" font-weight="700">A book to keep.</text>
+      <text x="285" y="42" fill="#B85639" font-family="Helvetica" font-size="12" font-weight="700">Edit</text>
+      <text x="329" y="42" fill="#183A31" font-family="Helvetica" font-size="12" font-weight="700">Contents</text>
+    </g>
+    <g id="toolbar-default">
+      <rect x="0" y="610" width="390" height="84" fill="#FFFCF6" opacity=".96"/>
+      <g fill="#B85639" font-family="Helvetica" font-size="11" font-weight="700" text-anchor="middle">
+        <text x="49" y="649">◫</text><text x="49" y="671">Style</text>
+        <text x="146" y="649">✎</text><text x="146" y="671">Customize</text>
+        <text x="244" y="649">▤</text><text x="244" y="671">Paper</text>
+        <text x="341" y="649">↥</text><text x="341" y="671">Share page</text>
+      </g>
+      <line x1="97" y1="629" x2="97" y2="674" stroke="#DED4C1"/><line x1="195" y1="629" x2="195" y2="674" stroke="#DED4C1"/><line x1="292" y1="629" x2="292" y2="674" stroke="#DED4C1"/>
+      <text x="24" y="713" fill="#64756C" font-family="Helvetica" font-size="10">☝  Swipe left or right</text>
+      <text x="365" y="713" fill="#64756C" font-family="Helvetica" font-size="10" font-weight="700" text-anchor="end">PAGE 1 OF 8</text>
+    </g>
+    <g id="primary">
+      <rect x="24" y="746" width="342" height="58" rx="15" fill="#183A31"/>
+      <text x="46" y="781" fill="#FFF" font-family="Helvetica" font-size="16" font-weight="700">Generate full PDF</text>
+      <text x="340" y="781" fill="#FFF" font-family="Helvetica" font-size="22">→</text>
+    </g>
+  </defs>
+
+  <!-- Default purchased state -->
+  <g transform="translate(64 142)" filter="url(#shadow)">
+    <rect width="390" height="844" rx="28" fill="#F8F3E8"/>
+    <use href="#topbar"/><use href="#paper-page"/><use href="#toolbar-default"/><use href="#primary"/>
+  </g>
+  <text x="64" y="1030" fill="#183A31" font-family="Helvetica" font-size="16" font-weight="700">01 · Purchased · Ready</text>
+  <text x="64" y="1056" fill="#64756C" font-family="Helvetica" font-size="13">Share page is visible only in unlocked Final Preview.</text>
+
+  <!-- Preparing state -->
+  <g transform="translate(445 142)" filter="url(#shadow)">
+    <rect width="390" height="844" rx="28" fill="#F8F3E8"/>
+    <use href="#topbar"/><use href="#paper-page"/><use href="#toolbar-default"/>
+    <rect x="294" y="610" width="96" height="84" fill="#FFFCF6"/>
+    <text x="342" y="649" fill="#64756C" text-anchor="middle" font-family="Helvetica" font-size="15">◌</text>
+    <text x="342" y="671" fill="#64756C" text-anchor="middle" font-family="Helvetica" font-size="11" font-weight="700">Preparing…</text>
+    <use href="#primary"/>
+  </g>
+  <text x="445" y="1030" fill="#183A31" font-family="Helvetica" font-size="16" font-weight="700">02 · Preparing PNG</text>
+  <text x="445" y="1056" fill="#64756C" font-family="Helvetica" font-size="13">Only Share page is disabled; other actions remain stable.</text>
+
+  <!-- Failure state -->
+  <g transform="translate(826 142)" filter="url(#shadow)">
+    <rect width="390" height="844" rx="28" fill="#F8F3E8"/>
+    <use href="#topbar"/><use href="#paper-page"/><use href="#toolbar-default"/><use href="#primary"/>
+    <rect width="390" height="844" rx="28" fill="#183A31" opacity=".22"/>
+    <rect x="34" y="300" width="322" height="210" rx="20" fill="#FFFCF6"/>
+    <text x="58" y="344" fill="#183A31" font-family="Iowan Old Style, Georgia" font-size="22">Couldn’t prepare this page.</text>
+    <text x="58" y="378" fill="#64756C" font-family="Helvetica" font-size="13">The page is still safe in your book.</text>
+    <text x="58" y="398" fill="#64756C" font-family="Helvetica" font-size="13">Please try sharing again.</text>
+    <line x1="34" y1="438" x2="356" y2="438" stroke="#DED4C1"/>
+    <text x="195" y="478" fill="#B85639" font-family="Helvetica" font-size="15" font-weight="700" text-anchor="middle">OK</text>
+  </g>
+  <text x="826" y="1030" fill="#183A31" font-family="Helvetica" font-size="16" font-weight="700">03 · Render failed</text>
+  <text x="826" y="1056" fill="#64756C" font-family="Helvetica" font-size="13">Dismiss returns to the same page; no stale file is shared.</text>
+
+  <!-- System sheet state -->
+  <g transform="translate(1207 142)" filter="url(#shadow)">
+    <rect width="390" height="844" rx="28" fill="#F8F3E8"/>
+    <use href="#topbar"/><use href="#paper-page"/><use href="#toolbar-default"/><use href="#primary"/>
+    <rect width="390" height="844" rx="28" fill="#183A31" opacity=".18"/>
+    <rect x="12" y="456" width="366" height="376" rx="24" fill="#F5F5F5"/>
+    <rect x="173" y="466" width="44" height="5" rx="3" fill="#B5B5B5"/>
+    <rect x="30" y="494" width="58" height="74" rx="5" fill="#F8F3E8" stroke="#DED4C1"/>
+    <text x="104" y="520" fill="#111" font-family="Helvetica" font-size="14" font-weight="700">Milo-page-01.png</text>
+    <text x="104" y="544" fill="#666" font-family="Helvetica" font-size="12">PNG image · current page</text>
+    <g font-family="Helvetica" font-size="11" fill="#111" text-anchor="middle">
+      <circle cx="62" cy="620" r="25" fill="#FFF"/><text x="62" y="655">AirDrop</text>
+      <circle cx="136" cy="620" r="25" fill="#FFF"/><text x="136" y="655">Messages</text>
+      <circle cx="210" cy="620" r="25" fill="#FFF"/><text x="210" y="655">Mail</text>
+      <circle cx="284" cy="620" r="25" fill="#FFF"/><text x="284" y="655">Save Image</text>
+    </g>
+    <rect x="24" y="690" width="342" height="50" rx="12" fill="#FFF"/><text x="44" y="721" fill="#111" font-family="Helvetica" font-size="14">Copy</text>
+    <rect x="24" y="750" width="342" height="50" rx="12" fill="#FFF"/><text x="195" y="781" fill="#007AFF" font-family="Helvetica" font-size="14" text-anchor="middle">Cancel</text>
+  </g>
+  <text x="1207" y="1030" fill="#183A31" font-family="Helvetica" font-size="16" font-weight="700">04 · System Share Sheet</text>
+  <text x="1207" y="1056" fill="#64756C" font-family="Helvetica" font-size="13">One unlocked PNG; dismiss stays on page.</text>
+</svg>

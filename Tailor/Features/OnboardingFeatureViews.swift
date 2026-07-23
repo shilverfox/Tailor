@@ -25,7 +25,7 @@ struct WelcomeFeatureView: View {
         .padding(.top, 5)
         .padding(.bottom, 10)
         .accessibilityHidden(true)
-        Text("Gather real photographs into a private life archive. Nothing leaves your iPhone.").foregroundStyle(TailorColor.ink.opacity(0.76))
+        Text("Create a private memory book for a pet you loved. Nothing leaves your iPhone.").foregroundStyle(TailorColor.ink.opacity(0.76))
         Spacer(minLength: 120)
     }
     .overlay(alignment: .top) {
@@ -54,7 +54,7 @@ struct WelcomeFeatureView: View {
     }
     .safeAreaInset(edge: .bottom) {
         VStack(spacing: TailorSpacing.m) {
-            TailorPrimaryButton(title: "Create a life archive", action: next)
+            TailorPrimaryButton(title: "Create a memory book", action: next)
             Button("How we protect your photos") { showsPrivacy = true }
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(TailorColor.clay)
@@ -72,7 +72,7 @@ struct WelcomeFeatureView: View {
     .sheet(isPresented: $showsPrivacy) {
         VStack(alignment: .leading, spacing: 16) {
             Text("Your photos stay yours.").font(TailorFont.display(30))
-            Text("Processed on this iPhone. Your photos are not uploaded. Only photos you confirm are used in your archive.").foregroundStyle(TailorColor.secondaryInk)
+            Text("Processed on this iPhone. Your photos are not uploaded. Only photos you confirm are used in your book.").foregroundStyle(TailorColor.secondaryInk)
             Spacer()
             Button("Done") { showsPrivacy = false }.frame(maxWidth: .infinity, minHeight: 56).background(TailorColor.ink).foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 16))
         }.padding(24).presentationDetents([.medium])

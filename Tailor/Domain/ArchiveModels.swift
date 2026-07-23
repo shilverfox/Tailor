@@ -340,6 +340,7 @@ struct ReturnContextStack: Codable, Equatable, Sendable {
 
 /// Deterministic non-personal book for the explicit UI-automation visual route.
 /// It is never constructed by a production archive flow.
+#if DEBUG
 enum MemoryBookVisualQAFixture {
     private static let fixedRevisionID = UUID(uuidString: "00000000-0000-0000-0000-000000000901")!
 
@@ -542,6 +543,7 @@ enum MemoryBookVisualQAAsset {
         }
     }
 }
+#endif
 
 /// Platform-neutral page tokens. SwiftUI and the Quartz exporter deliberately
 /// consume this value rather than maintaining visually similar palettes in two

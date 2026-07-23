@@ -197,8 +197,12 @@ struct AlbumEditorFeatureView: View {
 
     private func editor(book: MemoryBookDocument, pageIndex: Int) -> some View {
         let page = book.pages[pageIndex]
+        #if DEBUG
         let usesSafetyFixtureWatermark = ProcessInfo.processInfo.arguments.contains("-uiTesting")
             && ProcessInfo.processInfo.arguments.contains("text-safe-drag")
+        #else
+        let usesSafetyFixtureWatermark = false
+        #endif
         return ZStack {
             Color(red: 0.07, green: 0.16, blue: 0.13).ignoresSafeArea()
             VStack(spacing: 0) {
@@ -1561,6 +1565,7 @@ private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
         view.color = color
         view.canonicalScale = canonicalScale
         view.setNeedsDisplay()
+        #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTesting") {
             view.isAccessibilityElement = true
             view.accessibilityIdentifier = "Text renderer diagnostic \(diagnosticRole)"
@@ -1569,6 +1574,7 @@ private struct MemoryBookAttributedTextPreview: UIViewRepresentable {
                 prefix: "snapshot=\(snapshot.value.count);attributed=\(attributed.length);color=\(color.description)"
             )
         }
+        #endif
     }
 }
 
@@ -3542,6 +3548,9 @@ struct PreviewFeatureView: View {
     /// after rotation; a MemoryBookPage identity does not.
     @State private var showCustomization = false
     @State private var showContents = false
+    @State private var isPreparingPageShare = false
+    @State private var pageSharePayload: PageSharePayload?
+    @State private var pageShareError: String?
     @StateObject private var photoAvailability = PhotoAssetAvailabilityMonitor()
 
     init(
@@ -3615,26 +3624,29 @@ struct PreviewFeatureView: View {
                 .padding(.horizontal, 18)
                 .background(.ultraThinMaterial)
                 Spacer()
-                // Two rows: actions on top (Style / Customize / Paper), reading
-                // status below (swipe hint + page count). Splitting them stops
-                // the single crowded row that forced "Customize" to hyphenate,
-                // and keeps controls and status at distinct information levels.
+                // Two rows: equal-width tools on top, reading status below.
+                // Final Preview adds page sharing as a fourth tool; using
+                // icon+label actions keeps all hit targets stable at 390 pt.
                 VStack(spacing: 10) {
-                    HStack(spacing: 16) {
-                        Button("Style") { changeStyle?() }
-                            .foregroundStyle(changeStyle == nil ? TailorColor.secondaryInk : TailorColor.clay)
-                            .disabled(changeStyle == nil)
-                        Rectangle().fill(TailorColor.line).frame(width: 1, height: 14)
-                        Button("Customize") { editPage(selectedLogicalPageID) }
-                            .foregroundStyle(TailorColor.clay)
-                        Rectangle().fill(TailorColor.line).frame(width: 1, height: 14)
-                        Button("Paper") { showCustomization = true }
-                            .foregroundStyle(TailorColor.clay)
-                        Spacer()
+                    HStack(spacing: 0) {
+                        PreviewToolbarAction(title: "Style", systemImage: "paintpalette", enabled: changeStyle != nil) { changeStyle?() }
+                        PreviewToolbarSeparator()
+                        PreviewToolbarAction(title: "Customize", systemImage: "pencil") { editPage(selectedLogicalPageID) }
+                        PreviewToolbarSeparator()
+                        PreviewToolbarAction(title: "Paper", systemImage: "doc") { showCustomization = true }
+                        if purchased {
+                            PreviewToolbarSeparator()
+                            PreviewToolbarAction(
+                                title: isPreparingPageShare ? "Preparing…" : "Share page",
+                                systemImage: "square.and.arrow.up",
+                                enabled: !isPreparingPageShare,
+                                showsProgress: isPreparingPageShare,
+                                accessibilityLabel: isPreparingPageShare ? "Preparing current page for sharing" : "Share current page"
+                            ) {
+                                prepareCurrentPageShare()
+                            }
+                        }
                     }
-                    .font(.footnote.weight(.bold))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
                     HStack {
                         Label("Swipe left or right", systemImage: "hand.draw")
                             .font(.caption.weight(.medium))
@@ -3655,7 +3667,7 @@ struct PreviewFeatureView: View {
                         Label("Every preview page is watermarked.", systemImage: "drop.triangle")
                             .font(.footnote.weight(.bold))
                             .foregroundStyle(TailorColor.ink)
-                        Text("Your book remains fully editable until you unlock the complete album.")
+                        Text("Your book remains fully editable until you unlock the complete book.")
                             .font(.caption)
                             .foregroundStyle(TailorColor.secondaryInk)
                     }
@@ -3669,6 +3681,9 @@ struct PreviewFeatureView: View {
         .sheet(isPresented: $showCustomization) {
             PreviewCustomizationSheet(style: $style, pageSize: $pageSize, showsStyles: false)
         }
+        .sheet(item: $pageSharePayload, onDismiss: cleanupPageSharePayload) { payload in
+            ActivityShareSheet(activityItems: [payload.url])
+        }
         .sheet(isPresented: $showContents) {
             ReaderContentsSheet(
                 document: documentBinding.wrappedValue,
@@ -3680,13 +3695,25 @@ struct PreviewFeatureView: View {
                 showContents = false
             }
         }
+        .alert("Couldn’t prepare this page.", isPresented: Binding(
+            get: { pageShareError != nil },
+            set: { if !$0 { pageShareError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pageShareError ?? "The page is still safe in your book. Please try sharing again.")
+        }
         .onAppear {
+            #if DEBUG
             let arguments = ProcessInfo.processInfo.arguments
             if let index = arguments.firstIndex(of: "-uiFixturePage"), arguments.indices.contains(index + 1), let requested = UUID(uuidString: arguments[index + 1]), memoryBook?.pages.contains(where: { $0.id == requested }) == true { selectedLogicalPageID = requested }
             else if selectedLogicalPageID == nil { selectedLogicalPageID = memoryBook?.readerVisiblePages(watermarked: !purchased).first?.id }
+            #else
+            if selectedLogicalPageID == nil { selectedLogicalPageID = memoryBook?.readerVisiblePages(watermarked: !purchased).first?.id }
+            #endif
         }
         .safeAreaInset(edge: .bottom) {
-            TailorPrimaryButton(title: purchased ? "Generate full PDF" : "Unlock complete album", action: next)
+            TailorPrimaryButton(title: purchased ? "Generate full PDF" : "Unlock complete book", action: next)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 10)
                 .background(TailorColor.paper)
@@ -3706,6 +3733,139 @@ struct PreviewFeatureView: View {
         }
         return page.pageNumber
     }
+
+    @MainActor
+    private func prepareCurrentPageShare() {
+        guard purchased, !isPreparingPageShare else { return }
+        let book = documentBinding.wrappedValue
+        cleanupPageSharePayload()
+        pageShareError = nil
+
+        let visiblePages = book.readerVisiblePages(watermarked: false)
+        let selectedPage: MemoryBookPage?
+        if let selectedLogicalPageID {
+            selectedPage = visiblePages.first(where: { $0.id == selectedLogicalPageID })
+        } else {
+            selectedPage = visiblePages.first
+        }
+        guard let page = selectedPage, let pageIndex = book.pages.firstIndex(where: { $0.id == page.id }) else {
+            pageShareError = "The page is still safe in your book. Please try sharing again."
+            return
+        }
+
+        isPreparingPageShare = true
+        defer { isPreparingPageShare = false }
+
+        let pointSize = MemoryBookPageRenderPlan.points(for: book.pageSize)
+        let imageWidth: CGFloat = 1400
+        let imageHeight = imageWidth * pointSize.height / pointSize.width
+        let pageBinding = Binding<MemoryBookPage>(
+            get: { book.pages[pageIndex] },
+            set: { _ in }
+        )
+        let renderer = ImageRenderer(content:
+            EditorBookPageCanvas(
+                page: pageBinding,
+                document: book,
+                selectedElementID: .constant(nil),
+                textDraftHighlight: .constant(nil),
+                editing: false,
+                watermarked: false,
+                isPhotoAvailable: PhotoAssetAvailability.isAvailable,
+                beginEdit: {},
+                endEdit: {}
+            )
+            .frame(width: imageWidth, height: imageHeight)
+        )
+        renderer.scale = UIScreen.main.scale
+
+        guard let image = renderer.uiImage, let data = image.pngData() else {
+            pageShareError = "The page is still safe in your book. Please try sharing again."
+            return
+        }
+
+        let safeName = sanitizedFileStem(name)
+        let fileName = "\(safeName.isEmpty ? "Tailor" : safeName)-page-\(String(format: "%02d", page.pageNumber)).png"
+        let url = URL.temporaryDirectory.appending(path: fileName)
+        do {
+            try data.write(to: url, options: .atomic)
+            pageSharePayload = PageSharePayload(url: url)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+            pageShareError = "The page is still safe in your book. Please try sharing again."
+        }
+    }
+
+    private func sanitizedFileStem(_ rawName: String) -> String {
+        let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let scalars = trimmed.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let collapsed = String(scalars).split(separator: "-").joined(separator: "-")
+        return collapsed.trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
+    }
+
+    private func cleanupPageSharePayload() {
+        if let url = pageSharePayload?.url {
+            try? FileManager.default.removeItem(at: url)
+        }
+        pageSharePayload = nil
+    }
+}
+
+private struct PreviewToolbarSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(TailorColor.line)
+            .frame(width: 1, height: 45)
+    }
+}
+
+private struct PreviewToolbarAction: View {
+    let title: String
+    let systemImage: String
+    var enabled = true
+    var showsProgress = false
+    var accessibilityLabel: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                if showsProgress {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? TailorColor.clay : TailorColor.secondaryInk)
+        .disabled(!enabled)
+        .accessibilityLabel(accessibilityLabel ?? title)
+    }
+}
+
+private struct PageSharePayload: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct AlbumPagesPreview: View {
@@ -3913,7 +4073,7 @@ private struct ReaderContentsSheet: View {
         )) {
             Button("Keep reading", role: .cancel) {}
         } message: {
-            Text("\(unavailableTitle ?? "This chapter") is available after you unlock the complete album.")
+            Text("\(unavailableTitle ?? "This chapter") is available after you unlock the complete book.")
         }
     }
 }
@@ -4017,7 +4177,7 @@ private struct PreviewCustomizationSheet: View {
 
 struct PurchaseFeatureView: View {
     let revisionID: UUID?; let paperSize: PDFPageSize; let displayPrice: String?; let isLoadingPrice: Bool; let priceLoadFailed: Bool; let retryPrice: () -> Void; let purchase: () -> Void; let restore: () -> Void; let errorMessage: String?; let noticeMessage: String?; let isPurchasing: Bool; let next: () -> Void; let back: () -> Void
-    var body: some View { TailorScreen(eyebrow: "ONE-TIME UNLOCK", title: "Keep every page.", back: back) {
+    var body: some View { TailorScreen(eyebrow: "ONE-TIME UNLOCK", title: "Create the complete book.", back: back) {
         TailorInfoCard(symbol: "checkmark.seal.fill", title: "BOOK CHECK PASSED", message: "Revision \(revisionID?.uuidString.prefix(8) ?? "—") · \(paperSize == .letter ? "US Letter" : "A4") · Rules v\(BookCheckCacheKey.currentRulesVersion)")
         if let displayPrice {
             Text("\(displayPrice) · One-time purchase")
@@ -4034,8 +4194,8 @@ struct PurchaseFeatureView: View {
                 .foregroundStyle(TailorColor.clay)
                 .accessibilityIdentifier("Retry unlock price")
         }
-        ForEach(["Full, watermark-free PDF", "Every chapter and selected photo", "Print-ready A4 and US Letter", "Stays private on your device"], id: \.self) { Label($0, systemImage: "checkmark.circle.fill").foregroundStyle(TailorColor.ink) }
-        TailorInfoCard(symbol: "person.crop.circle.badge.checkmark", title: "No subscription. No account.", message: "Your full album remains editable on this iPhone.").frame(maxWidth: .infinity)
+        ForEach(["Watermark-free PDF", "Every chapter and selected photo", "Print-ready US Letter and A4", "Stays private on your device"], id: \.self) { Label($0, systemImage: "checkmark.circle.fill").foregroundStyle(TailorColor.ink) }
+        TailorInfoCard(symbol: "person.crop.circle.badge.checkmark", title: "No subscription. No account.", message: "Your complete book remains editable on this iPhone.").frame(maxWidth: .infinity)
         if let errorMessage { Text(errorMessage).font(.footnote).foregroundStyle(.red) }
         if let noticeMessage { Text(noticeMessage).font(.footnote).foregroundStyle(TailorColor.secondaryInk) }
         Text("Payment is charged to your Apple Account after confirmation.")
@@ -4045,8 +4205,8 @@ struct PurchaseFeatureView: View {
         Spacer(minLength: 80)
     }.safeAreaInset(edge: .bottom) {
         VStack(spacing: 10) {
-            TailorPrimaryButton(title: isPurchasing ? "Contacting App Store…" : "Unlock complete album", disabled: isPurchasing || displayPrice == nil, action: purchase)
-                .accessibilityIdentifier("Unlock complete album")
+            TailorPrimaryButton(title: isPurchasing ? "Contacting App Store…" : "Unlock complete book", disabled: isPurchasing || displayPrice == nil, action: purchase)
+                .accessibilityIdentifier("Unlock complete book")
             Button("Restore purchase", action: restore).font(.footnote.weight(.bold)).foregroundStyle(TailorColor.clay).disabled(isPurchasing)
         }
         .padding(.horizontal, 24)
@@ -4083,7 +4243,7 @@ private struct MemoryBookExportCover: View {
 
 struct ExportFeatureView: View {
     let name: String; let exportURL: URL?; let exportRecord: MemoryBookExportRecord?; let memoryBook: MemoryBookDocument?; let errorMessage: String?; let isExporting: Bool; let completedPages: Int; let totalPages: Int; let createPDF: () -> Void; let cancelPDF: () -> Void; let done: () -> Void; let back: () -> Void
-    var body: some View { TailorScreen(eyebrow: "EXPORT", title: isExporting ? "Making your archive." : (exportURL == nil ? "Ready when you are." : "Your archive is ready."), back: isExporting ? nil : back) {
+    var body: some View { TailorScreen(eyebrow: "EXPORT", title: isExporting ? "Making your book." : (exportURL == nil ? "Ready when you are." : "Your PDF is ready."), back: isExporting ? nil : back) {
         VStack(spacing: 18) {
             Group {
                 if isExporting { ProgressView(value: totalPages > 0 ? Double(completedPages) / Double(totalPages) : nil).controlSize(.large) }
@@ -4092,7 +4252,7 @@ struct ExportFeatureView: View {
                 .frame(width: 82, height: 82)
                 .background(TailorColor.mist)
                 .clipShape(Circle())
-            Text(isExporting ? "Rendering page \(min(completedPages + 1, max(totalPages, 1))) of \(max(totalPages, 1)) on this iPhone. Your edits are safely saved." : (exportURL == nil ? "Review your book, then create a print-ready PDF when you are ready." : "Saved privately on this iPhone. Share a copy whenever you’re ready."))
+            Text(isExporting ? "Rendering page \(min(completedPages + 1, max(totalPages, 1))) of \(max(totalPages, 1)) on this iPhone. Your edits are safely saved." : (exportURL == nil ? "Review your book, then create a print-ready PDF when you are ready." : "Saved privately on this iPhone. Share a copy or keep it for yourself."))
                 .font(.system(size: 16, weight: .regular, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(TailorColor.ink.opacity(0.75))
@@ -4107,7 +4267,7 @@ struct ExportFeatureView: View {
             } else {
                 VStack(spacing: 6) {
                     Text(name).font(TailorFont.display(28)).foregroundStyle(TailorColor.ink)
-                    Text("Life Archive").font(.system(size: 14, weight: .regular, design: .rounded)).foregroundStyle(TailorColor.ink.opacity(0.72))
+                    Text("Memory Book").font(.system(size: 14, weight: .regular, design: .rounded)).foregroundStyle(TailorColor.ink.opacity(0.72))
                 }
                 .frame(width: 150, height: 210)
                 .background(TailorColor.paper)
@@ -4166,13 +4326,13 @@ struct ArchivesFeatureView: View {
             HStack(spacing: 12) {
                 RoundedRectangle(cornerRadius: 10).fill(TailorColor.mist).frame(width: 72, height: 72).overlay(Text(String(name.prefix(1))).font(TailorFont.display(28)).foregroundStyle(TailorColor.ink))
                 VStack(alignment: .leading) {
-                    Text("\(name)’s Life Archive").font(.callout.weight(.bold))
+                    Text("\(name)’s Memory Book").font(.callout.weight(.bold))
                     Text(archiveSubtitle).font(.footnote).foregroundStyle(TailorColor.ink.opacity(0.7)).accessibilityIdentifier("Archive metadata")
                     Text(checkpointSummary).font(.caption).foregroundStyle(TailorColor.secondaryInk)
                 }
                 Spacer(); Image(systemName: "chevron.right")
             }
-        }.buttonStyle(.plain).padding(16).background(TailorColor.elevated).clipShape(RoundedRectangle(cornerRadius: 18)).overlay(RoundedRectangle(cornerRadius: 18).stroke(TailorColor.mist, lineWidth: 1)).accessibilityLabel("Open \(name)’s Life Archive")
+        }.buttonStyle(.plain).padding(16).background(TailorColor.elevated).clipShape(RoundedRectangle(cornerRadius: 18)).overlay(RoundedRectangle(cornerRadius: 18).stroke(TailorColor.mist, lineWidth: 1)).accessibilityLabel("Open \(name)’s Memory Book")
         if let pdfURL {
             VStack(alignment: .leading, spacing: 8) {
                 Text("RECENT EXPORT").font(.caption.weight(.bold)).tracking(1.1).foregroundStyle(TailorColor.secondaryInk)
@@ -4247,7 +4407,7 @@ struct AboutTailorSheet: View {
                 VStack(alignment: .leading, spacing: TailorSpacing.l) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Tailor").font(TailorFont.display(32)).foregroundStyle(TailorColor.ink)
-                        Text("A private, on-device life archive for the pets you love.")
+                        Text("A private, on-device memory book for the pets you love.")
                             .font(.callout).foregroundStyle(TailorColor.secondaryInk)
                     }
                     TailorInfoCard(symbol: "lock.shield", title: "Everything stays on this iPhone", message: "Photo matching runs locally. Tailor never uploads your library.")

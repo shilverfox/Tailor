@@ -46,6 +46,7 @@ actor DemoPurchaseService: PurchaseServicing {
         return Locale.current.currency?.identifier == "CNY" ? "¥148.00" : "$19.99"
     }
     func purchaseUnlock() async throws -> PurchaseState {
+        #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         let state = arguments.firstIndex(of: "-uiDemoState").flatMap { index in
             arguments.indices.contains(index + 1) ? arguments[index + 1] : nil
@@ -58,6 +59,10 @@ actor DemoPurchaseService: PurchaseServicing {
             entitled = true
             return .entitled
         }
+        #else
+        entitled = true
+        return .entitled
+        #endif
     }
     func restorePurchases() async throws -> PurchaseState { entitled ? .restored : .idle }
     func isEntitled() async -> Bool { entitled }

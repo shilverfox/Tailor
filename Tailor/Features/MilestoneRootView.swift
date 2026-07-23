@@ -74,7 +74,7 @@ struct MilestoneRootView: View {
         // Tailor is suspended. UI fixtures deliberately remain isolated.
         guard phase == .active,
               !isPurchaseBypassed,
-              !ProcessInfo.processInfo.arguments.contains("-uiTesting") else { return }
+              !isUITestFixtureSession else { return }
         Task {
             photoLibrary.refresh()
             await reconcileManualAssetsIfAuthorized()
@@ -112,11 +112,15 @@ struct MilestoneRootView: View {
     }
 
     private var isPendingTimelineUITestFixture: Bool {
+        #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("-uiTesting"),
               let stateIndex = arguments.firstIndex(of: "-uiDemoState"),
               arguments.indices.contains(stateIndex + 1) else { return false }
         return arguments[stateIndex + 1] == "review-pending-gate"
+        #else
+        false
+        #endif
     }
 
     private var storedPDFURL: URL? {
@@ -499,10 +503,10 @@ struct MilestoneRootView: View {
         exportCompletedPages = 0
         exportTotalPages = isExporting ? 8 : 0
         if requestedRoute == .export && demoState == "export-failed" {
-            operationError = "We couldn’t save the PDF. Your archive is still here."
+            operationError = "We couldn’t save the PDF. Your book is still here."
         }
         if requestedRoute == .purchase, demoState == "purchase-failed" {
-            operationError = "Your purchase could not be completed. Your album is still here."
+            operationError = "Your purchase could not be completed. Your book is still here."
         }
         route = requestedRoute
         container.router.reset()
@@ -970,11 +974,18 @@ struct MilestoneRootView: View {
             style = saved.style
             pageSize = saved.pageSize
         } else if memoryBook == nil {
+            #if DEBUG
             guard ProcessInfo.processInfo.arguments.contains("-uiTesting") else {
                 operationError = "Choose a book style and paper size before opening the preview."
                 if route != .bookStyle { go(.bookStyle) }
                 return
             }
+            #else
+            operationError = "Choose a book style and paper size before opening the preview."
+            if route != .bookStyle { go(.bookStyle) }
+            return
+            #endif
+            #if DEBUG
             var built = MemoryBookBuilder.build(profile: document.profile, photos: document.photos, chapters: document.chapters, style: style, pageSize: pageSize)
             // UI-only Crop fixtures use the identical editor route with real
             // portrait/landscape and ±15° document geometry. Production data
@@ -1085,6 +1096,7 @@ struct MilestoneRootView: View {
             }
             memoryBook = built
             persistDocument()
+            #endif
         }
     }
 
@@ -1347,19 +1359,15 @@ struct MilestoneRootView: View {
                     purchased = true
                     go(.finalPreview)
                 case .pending:
-                    purchaseNotice = "Your purchase is pending approval. Your album and edits are still here."
-                    go(.bookCheck)
+                    purchaseNotice = "Your purchase is pending approval. Your book and edits are still here."
                 case .cancelled:
-                    purchaseNotice = "Purchase cancelled. Your album and edits are still here."
-                    go(.bookCheck)
+                    purchaseNotice = "Purchase cancelled. Your book and edits are still here."
                 case .failed(let message):
                     operationError = message
-                    go(.bookCheck)
                 case .idle, .purchasing:
                     operationError = "Purchase could not be completed. Please try again."
-                    go(.bookCheck)
                 }
-            } catch { operationError = error.localizedDescription; go(.bookCheck) }
+            } catch { operationError = error.localizedDescription }
         }
     }
     private func restorePurchase() {
@@ -1376,9 +1384,8 @@ struct MilestoneRootView: View {
                     go(.finalPreview)
                 } else {
                     operationError = "No previous Tailor purchase was found for this Apple ID."
-                    go(.bookCheck)
                 }
-            } catch { operationError = error.localizedDescription; go(.bookCheck) }
+            } catch { operationError = error.localizedDescription }
         }
     }
     private func exportPDF() {

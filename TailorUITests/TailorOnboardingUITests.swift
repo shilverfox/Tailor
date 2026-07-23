@@ -12,10 +12,14 @@ final class TailorOnboardingUITests: XCTestCase {
     func testWelcomeAndPrivacyFlowRendersAtPhoneSize() {
         launch()
         XCTAssertTrue(app.staticTexts["Keep a life close."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Create a life archive"].exists)
-        app.buttons["Create a life archive"].tap()
+        XCTAssertTrue(app.buttons["Create a memory book"].exists)
+        app.buttons["Create a memory book"].tap()
         XCTAssertTrue(app.staticTexts["Your photos stay yours."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Allow photo access"].exists)
+        XCTAssertTrue(
+            app.buttons["Allow photo access"].exists
+                || app.buttons["Continue with selected photos"].exists
+                || app.buttons["Import photos manually"].exists
+        )
     }
 
     func testWelcomeContainsPhotoPrivacyExplanation() {
@@ -24,11 +28,9 @@ final class TailorOnboardingUITests: XCTestCase {
     }
 
     func testManualPhotoSelectionContinuesWhenFullLibraryAccessIsNotGranted() {
-        launch()
-        app.buttons["Create a life archive"].tap()
-        XCTAssertTrue(app.buttons["Choose photos manually instead"].waitForExistence(timeout: 3))
-
-        app.buttons["Choose photos manually instead"].tap()
+        launch(demoRoute: "privacy", demoState: "denied")
+        XCTAssertTrue(app.buttons["Import photos manually"].waitForExistence(timeout: 3))
+        app.buttons["Import photos manually"].tap()
 
         XCTAssertTrue(app.staticTexts["Tell us about them."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Choose reference photos"].exists)
@@ -139,23 +141,25 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(createTimeline.waitForExistence(timeout: 3))
         createTimeline.tap()
 
-        let editAlbum = app.buttons["Edit album"]
-        XCTAssertTrue(editAlbum.waitForExistence(timeout: 3))
-        editAlbum.tap()
-        let moreEditorActions = app.buttons["More editor actions"]
-        XCTAssertTrue(moreEditorActions.waitForExistence(timeout: 3))
-        moreEditorActions.tap()
-        let preview = app.buttons["Reading preview"]
-        XCTAssertTrue(preview.waitForExistence(timeout: 3))
-        preview.tap()
+        XCTAssertTrue(app.buttons["Continue to story"].waitForExistence(timeout: 4))
+        app.buttons["Continue to story"].tap()
+        XCTAssertTrue(app.buttons["Choose book style"].waitForExistence(timeout: 3))
+        app.buttons["Choose book style"].tap()
+        XCTAssertTrue(app.staticTexts["Choose how the story feels."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Create first draft"].exists)
+        app.buttons["Create first draft"].tap()
 
-        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 3))
-        app.buttons["Unlock complete album · $19.99"].tap()
-        XCTAssertTrue(app.staticTexts["Keep every page."].waitForExistence(timeout: 3))
-        app.buttons["Unlock complete album"].tap()
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 4))
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.buttons["Continue to final preview"].waitForExistence(timeout: 4))
+        app.buttons["Continue to final preview"].tap()
+        XCTAssertTrue(app.staticTexts["Create the complete book."].waitForExistence(timeout: 3))
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 4))
+        app.buttons["Generate full PDF"].tap()
         XCTAssertTrue(app.staticTexts["Ready when you are."].waitForExistence(timeout: 3))
         app.buttons["Generate PDF"].tap()
-        XCTAssertTrue(app.staticTexts["Your archive is ready."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your PDF is ready."].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Save and share PDF"].exists)
     }
 
@@ -314,8 +318,8 @@ final class TailorOnboardingUITests: XCTestCase {
         renderAndCapture([
             ("editor", "1 of 8"),
             ("preview", "A book to keep."),
-            ("purchase", "Keep every page."),
-            ("export", "Your archive is ready."),
+            ("purchase", "Create the complete book."),
+            ("export", "Your PDF is ready."),
             ("archive", "Your archives.")
         ])
     }
@@ -331,7 +335,7 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["US Letter"].exists)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Back to editor"].exists)
-        XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+        XCTAssertTrue(app.buttons["Unlock complete book"].exists)
         app.buttons["Style"].tap()
         XCTAssertTrue(app.staticTexts["Choose how the story feels."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Warm Paper"].exists)
@@ -341,7 +345,8 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Film Album"].exists)
 
         launch(demoRoute: "preview", demoState: "preview-purchased")
-        XCTAssertTrue(app.staticTexts["PAGE 1 OF 8"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Share current page"].exists)
         XCTAssertTrue(app.buttons["Generate full PDF"].exists)
     }
 
@@ -440,7 +445,7 @@ final class TailorOnboardingUITests: XCTestCase {
         chapters.element(boundBy: 2).tap()
 
         XCTAssertTrue(app.staticTexts["This chapter is not in the free sample."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["A long summer is available after you unlock the complete album."].exists)
+        XCTAssertTrue(app.staticTexts["A long summer is available after you unlock the complete book."].exists)
         XCTAssertTrue(app.buttons["Keep reading"].exists)
         app.buttons["Keep reading"].tap()
         XCTAssertTrue(app.navigationBars["Contents"].exists)
@@ -451,30 +456,30 @@ final class TailorOnboardingUITests: XCTestCase {
     func testPurchaseFailurePreservesTheUnlockScreenAndRestorePath() {
         launch(demoRoute: "purchase", demoState: "purchase-failed")
         XCTAssertTrue(app.descendants(matching: .any)["Localized unlock price"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Your purchase could not be completed. Your album is still here."].exists)
-        XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+        XCTAssertTrue(app.staticTexts["Your purchase could not be completed. Your book is still here."].exists)
+        XCTAssertTrue(app.buttons["Unlock complete book"].exists)
         XCTAssertTrue(app.buttons["Restore purchase"].exists)
     }
 
     func testPurchaseCancelledAndPendingKeepTheArchiveEditable() {
         launch(demoRoute: "purchase", demoState: "purchase-cancelled")
-        XCTAssertTrue(app.buttons["Unlock complete album"].waitForExistence(timeout: 3))
-        app.buttons["Unlock complete album"].tap()
-        XCTAssertTrue(app.staticTexts["Purchase cancelled. Your album and edits are still here."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+        XCTAssertTrue(app.buttons["Unlock complete book"].waitForExistence(timeout: 3))
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.staticTexts["Purchase cancelled. Your book and edits are still here."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Unlock complete book"].exists)
         XCTAssertTrue(app.buttons["Restore purchase"].exists)
 
         launch(demoRoute: "purchase", demoState: "purchase-pending")
-        XCTAssertTrue(app.buttons["Unlock complete album"].waitForExistence(timeout: 3))
-        app.buttons["Unlock complete album"].tap()
-        XCTAssertTrue(app.staticTexts["Your purchase is pending approval. Your album and edits are still here."].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Unlock complete album"].exists)
+        XCTAssertTrue(app.buttons["Unlock complete book"].waitForExistence(timeout: 3))
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.staticTexts["Your purchase is pending approval. Your book and edits are still here."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Unlock complete book"].exists)
     }
 
     func testPurchasePriceUnavailableCanRetryAndEnableUnlock() {
         launch(demoRoute: "purchase", demoState: "purchase-price-retry")
         XCTAssertTrue(app.staticTexts["Price unavailable"].waitForExistence(timeout: 3))
-        let unlock = app.buttons["Unlock complete album"]
+        let unlock = app.buttons["Unlock complete book"]
         XCTAssertTrue(unlock.exists)
         XCTAssertFalse(unlock.isEnabled)
 
@@ -526,7 +531,7 @@ final class TailorOnboardingUITests: XCTestCase {
 
     func testExportCompletionAndFailureKeepLocalActionsVisible() {
         launch(demoRoute: "export")
-        XCTAssertTrue(app.staticTexts["Your archive is ready."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Your PDF is ready."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Save and share PDF"].exists)
         XCTAssertTrue(app.buttons["Open archive"].exists)
         XCTAssertTrue(app.otherElements["Export book cover"].waitForExistence(timeout: 3))
@@ -535,14 +540,14 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Return to timeline"].exists)
 
         launch(demoRoute: "export", demoState: "export-failed")
-        XCTAssertTrue(app.staticTexts["We couldn’t save the PDF. Your archive is still here."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["We couldn’t save the PDF. Your book is still here."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Try again"].exists)
         XCTAssertTrue(app.buttons["Return to timeline"].exists)
     }
 
     func testExportRenderingStatePreventsDuplicateActions() {
         launch(demoRoute: "export", demoState: "exporting")
-        XCTAssertTrue(app.staticTexts["Making your archive."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Making your book."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Rendering page 1 of 8 on this iPhone. Your edits are safely saved."].exists)
         XCTAssertTrue(app.buttons["Rendering PDF…"].exists)
         XCTAssertTrue(app.buttons["Cancel rendering"].exists)
@@ -551,10 +556,10 @@ final class TailorOnboardingUITests: XCTestCase {
 
     func testArchiveDeleteConfirmationDoesNotTouchSystemPhotos() {
         launch(demoRoute: "archive")
-        XCTAssertTrue(app.staticTexts["Milo’s Life Archive"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Open Milo’s Life Archive"].exists)
+        XCTAssertTrue(app.staticTexts["Milo’s Memory Book"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Open Milo’s Memory Book"].exists)
         XCTAssertTrue(app.staticTexts["Archive metadata"].exists)
-        app.buttons["Open Milo’s Life Archive"].tap()
+        app.buttons["Open Milo’s Memory Book"].tap()
         XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 3))
 
         launch(demoRoute: "archive")
@@ -577,7 +582,7 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["Every preview page is watermarked."].exists)
         XCTAssertTrue(app.buttons["Back to editor"].exists)
-        XCTAssertTrue(app.buttons["Unlock complete album · $19.99"].exists)
+        XCTAssertTrue(app.buttons["Unlock complete book · $19.99"].exists)
     }
 
     func testEditorFixtureExposesPagePhotoTextAndStyleTools() {
@@ -1545,7 +1550,7 @@ final class TailorOnboardingUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Ready when you are."].waitForExistence(timeout: 5))
         app.buttons["Generate PDF"].tap()
-        XCTAssertTrue(app.staticTexts["Your archive is ready."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Your PDF is ready."].waitForExistence(timeout: 15))
         attachScreenshot(named: "Tailor-M7-photorealistic-reviewed-PDF-complete")
     }
 
