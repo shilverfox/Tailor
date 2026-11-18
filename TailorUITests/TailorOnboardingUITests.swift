@@ -27,6 +27,57 @@ final class TailorOnboardingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["How we protect your photos"].waitForExistence(timeout: 5))
     }
 
+    func testMarketingScreenshotsWelcomeAndPrivacy() {
+        launch()
+        XCTAssertTrue(app.staticTexts["Keep a life close."].waitForExistence(timeout: 5))
+        attachScreenshot(named: "Tailor-marketing-welcome")
+
+        app.buttons["Create a memory book"].tap()
+        XCTAssertTrue(app.staticTexts["Your photos stay yours."].waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-privacy")
+
+        launch(demoRoute: "confirm", demoState: "review-ready")
+        let createTimeline = app.buttons["review.createTimeline"]
+        XCTAssertTrue(createTimeline.waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-review")
+        createTimeline.tap()
+        XCTAssertTrue(app.buttons["Continue to story"].waitForExistence(timeout: 4))
+        attachScreenshot(named: "Tailor-marketing-story-ready")
+
+        app.buttons["Continue to story"].tap()
+        XCTAssertTrue(app.buttons["Choose book style"].waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-timeline")
+
+        app.buttons["Choose book style"].tap()
+        XCTAssertTrue(app.staticTexts["Choose how the story feels."].waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-style")
+
+        XCTAssertTrue(app.buttons["Create first draft"].exists)
+        app.buttons["Create first draft"].tap()
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 4))
+        attachScreenshot(named: "Tailor-marketing-preview")
+
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.buttons["Continue to final preview"].waitForExistence(timeout: 4))
+        attachScreenshot(named: "Tailor-marketing-book-check")
+
+        app.buttons["Continue to final preview"].tap()
+        XCTAssertTrue(app.staticTexts["Create the complete book."].waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-purchase")
+
+        app.buttons["Unlock complete book"].tap()
+        XCTAssertTrue(app.staticTexts["A book to keep."].waitForExistence(timeout: 4))
+        attachScreenshot(named: "Tailor-marketing-final-preview-share")
+
+        app.buttons["Generate full PDF"].tap()
+        XCTAssertTrue(app.staticTexts["Ready when you are."].waitForExistence(timeout: 3))
+        attachScreenshot(named: "Tailor-marketing-export-ready")
+
+        app.buttons["Generate PDF"].tap()
+        XCTAssertTrue(app.staticTexts["Your PDF is ready."].waitForExistence(timeout: 5))
+        attachScreenshot(named: "Tailor-marketing-export-complete")
+    }
+
     func testManualPhotoSelectionContinuesWhenFullLibraryAccessIsNotGranted() {
         launch(demoRoute: "privacy", demoState: "denied")
         XCTAssertTrue(app.buttons["Import photos manually"].waitForExistence(timeout: 3))

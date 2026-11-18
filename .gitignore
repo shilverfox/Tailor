@@ -32,6 +32,7 @@ fastlane/test_output/
 
 # Local QA, generated media, and scratch output
 artifacts/
+outputs/
 tmp/
 scripts/__pycache__/
 *.xcresult
